@@ -50,7 +50,7 @@ def mock_user_verification(monkeypatch, *, status_code=200, body=None):
 def test_health():
     with TestClient(api.app) as client:
         response = client.get("/api/health")
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json() == {"status": "ok"}
 
 
@@ -114,7 +114,102 @@ def test_compression_rejects_unsupported_media_type(client, monkeypatch):
         headers={"Authorization": "Bearer valid-token"},
         files={"photo": ("notes.txt", b"not an image", "text/plain")},
     )
-    assert response.status_code == 415
+    assert response.status_code == 415, response.text
+
+
+def test_avatar_get_returns_current_builtin_selection(client, monkeypatch):
+    mock_user_verification(monkeypatch)
+    monkeypatch.setattr(api, "get_profile_avatar_id", lambda authenticated: "fern")
+
+    response = client.get("/api/profile/avatar", headers={"Authorization": "Bearer test-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"avatar_id": "fern"}
+
+
+def test_avatar_update_saves_allowed_id_for_authenticated_profile(client, monkeypatch):
+    mock_user_verification(monkeypatch, body={"id": "owner-uuid"})
+    updates = []
+    monkeypatch.setattr(
+        api,
+        "update_profile_avatar_id",
+        lambda authenticated, avatar_id: updates.append((authenticated.user_id, avatar_id)) or True,
+    )
+
+    response = client.put(
+        "/api/profile/avatar",
+        headers={"Authorization": "Bearer test-token"},
+        json={"avatar_id": "indigo"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"avatar_id": "indigo"}
+    assert updates == [("owner-uuid", "indigo")]
+
+
+def test_avatar_update_rejects_unknown_id(client, monkeypatch):
+    mock_user_verification(monkeypatch)
+    updates = []
+    monkeypatch.setattr(
+        api,
+        "update_profile_avatar_id",
+        lambda authenticated, avatar_id: updates.append(avatar_id) or True,
+    )
+
+    response = client.put(
+        "/api/profile/avatar",
+        headers={"Authorization": "Bearer test-token"},
+        json={"avatar_id": "arbitrary_url"},
+    )
+
+    assert response.status_code == 422
+    assert updates == []
+
+
+def test_avatar_update_rejects_extra_upload_fields(client, monkeypatch):
+    mock_user_verification(monkeypatch)
+    updates = []
+    monkeypatch.setattr(
+        api,
+        "update_profile_avatar_id",
+        lambda authenticated, avatar_id: updates.append(avatar_id) or True,
+    )
+
+    response = client.put(
+        "/api/profile/avatar",
+        headers={"Authorization": "Bearer test-token"},
+        json={"avatar_id": "sage", "image": "data:image/svg+xml,..."},
+    )
+
+    assert response.status_code == 422
+    assert updates == []
+
+
+def test_avatar_update_is_scoped_to_verified_user_and_uses_user_token(client, monkeypatch):
+    request_details = {}
+
+    def fake_patch(url, *, params, headers, json, timeout):
+        request_details.update(
+            url=url,
+            params=params,
+            headers=headers,
+            json=json,
+            timeout=timeout,
+        )
+        return httpx.Response(
+            200,
+            json=[{"id": "verified-user-id", "avatar_id": "ochre"}],
+            request=httpx.Request("PATCH", url),
+        )
+
+    monkeypatch.setattr(api.httpx, "patch", fake_patch)
+    authenticated = api.AuthenticatedUser("verified-user-id", "user-access-token")
+
+    assert api.update_profile_avatar_id(authenticated, "ochre")
+    assert request_details["url"] == "https://project.example.supabase.co/rest/v1/profiles"
+    assert request_details["params"] == {"id": "eq.verified-user-id"}
+    assert request_details["json"] == {"avatar_id": "ochre"}
+    assert request_details["headers"]["Authorization"] == "Bearer user-access-token"
 
 
 def test_compress_image_reencodes_to_webp_and_bounds_dimensions():

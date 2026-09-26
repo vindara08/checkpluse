@@ -9,7 +9,7 @@ See [DIGITAL_WARDROBE_PLAN.md](./DIGITAL_WARDROBE_PLAN.md) for the end-to-end pr
 - React + Vite with Supabase Auth and the Supabase publishable key.
 - Supabase Postgres for profiles, consent records, clothing metadata, outfits, and outfit items. Row Level Security (RLS) scopes data to each signed-in user.
 - Private Supabase Storage bucket for compressed WebP photos, with ownership enforced by Storage RLS policies.
-- FastAPI + Pillow validates the Supabase access token and compresses images. The browser uploads the resulting WebP directly to Supabase with that user's JWT.
+- FastAPI validates Supabase access tokens for profile avatar selection and compresses clothing images. Avatar images are bundled with the frontend; only the selected avatar ID is stored in the profile.
 
 The publishable key is safe to include in the frontend only because RLS policies are enabled. A Supabase service-role key is not used and must never be put in the browser.
 This storage redesign uses Supabase Auth instead of the previous local SQLite account/session store. Existing SQLite accounts and wardrobe records are not automatically imported; retain a protected backup before switching.
@@ -17,7 +17,7 @@ This storage redesign uses Supabase Auth instead of the previous local SQLite ac
 ## Run locally
 
 1. Install Node.js 20.19+ and Python 3.12+.
-2. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to create a Supabase project, the private `wardrobe-images` bucket, tables, signup trigger, and RLS policies.
+2. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to create a Supabase project, the private `wardrobe-images` bucket, tables, signup trigger, and RLS policies. After reviewing the deployed schema, apply [20260926_add_profiles_avatar_id.sql](./supabase/migrations/20260926_add_profiles_avatar_id.sql) to enable built-in avatar selection.
 3. Copy `.env.example` to `.env.local` and `backend/.env.example` to `backend/.env`. Put the Supabase project URL and publishable key in both files. These are publishable project settings; no secret key is required. Set the frontend origin in backend `APP_ORIGINS`.
 4. Start the frontend:
 
@@ -39,7 +39,9 @@ This storage redesign uses Supabase Auth instead of the previous local SQLite ac
 
 ## Image flow
 
-Pillow reorients, resizes to at most 1600 px, composites transparent pixels onto white, converts to WebP, and strips EXIF metadata. FastAPI checks the Supabase Auth token before processing. The React client uploads the compressed image to the user's UUID folder in the private Storage bucket, then writes metadata and the object path to Supabase Postgres. The original photo and image bytes are not stored in a database table.
+Pillow reorients clothing photos, resizes to at most 1600 px, composites transparent pixels onto white, converts to WebP, and strips EXIF metadata. FastAPI checks the Supabase Auth token before processing. The browser uploads the resulting WebP to the user's UUID folder in the private Storage bucket, then writes metadata and the object path to `clothing_items`. Built-in avatars are frontend assets; `profiles.avatar_id` stores only the selected stable ID, never image bytes. No avatar Storage bucket or upload is used.
+
+The bundled avatar IDs map to `public/avatars/fold-fern.svg` (`fern`), `fold-terracotta.svg` (`terracotta`), `fold-sage.svg` (`sage`), `fold-indigo.svg` (`indigo`), and `fold-ochre.svg` (`ochre`). Keep these identifiers aligned with the database check constraint and FastAPI allowlist.
 
 ## Privacy and launch readiness
 

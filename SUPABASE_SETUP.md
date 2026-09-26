@@ -217,9 +217,15 @@ grant select, insert, update, delete on public.outfit_items to authenticated;
 grant usage, select on sequence public.consent_records_id_seq to authenticated;
 ```
 
+### Built-in avatar migration
+
+The base `profiles` table above contains no avatar selection field. The previous frontend attempt used `profiles.avatar`, and the earlier local migration draft used `avatar_path`; neither is part of this built-in avatar design. No migration history or live database connection in this repository proves that either draft was applied in Supabase. After verifying the deployed `public.profiles` table and resolving any unexpected existing columns, review and apply [`supabase/migrations/20260926_add_profiles_avatar_id.sql`](./supabase/migrations/20260926_add_profiles_avatar_id.sql) manually. It stores only one of the built-in avatar IDs (`fern`, `terracotta`, `sage`, `indigo`, or `ochre`), defaults existing and new rows to `fern`, and grants the authenticated role permission to update only that column. It does not create a bucket or new Storage policies.
+
+If Supabase already has an `avatar_path` column from a prior manual run, keep it unchanged during this migration; it does not map reliably to a bundled avatar ID. Confirm the column's contents and dependencies separately before deciding whether to clean it up. If an `avatar_id` column already exists, compare its type, nullability, default, constraints, and values with the migration first; the SQL intentionally does not overwrite existing non-null selections, and it will fail rather than accept unsupported IDs.
+
 ### Tables
 
-- `profiles`: user display name and timestamps; row ID is the corresponding Supabase Auth user UUID.
+- `profiles`: user display name and timestamps; row ID is the corresponding Supabase Auth user UUID. The `avatar_id` selection is added by the separate migration above.
 - `consent_records`: immutable age, terms, and privacy acknowledgements captured by the Auth-user trigger.
 - `clothing_items`: user-owned clothing metadata plus the private Storage object path. Photo bytes are **not** stored in Postgres.
 - `outfits`: named saved outfit owned by one Auth user.
@@ -251,10 +257,18 @@ Restart Vite after changing `.env.local`, and restart FastAPI after changing `ba
 ## 5. Data flow and verification
 
 1. Signup sends name, age confirmation, terms/privacy acceptance, and their versions to Supabase Auth user metadata. The database trigger creates `profiles` and three consent rows.
-2. Supabase Auth returns a session JWT. The React Supabase client attaches it to Postgres and Storage operations; RLS checks `auth.uid()` for every row/object.
+2. Supabase Auth returns a session JWT. The React Supabase client attaches it to Postgres and Storage operations; RLS checks `auth.uid()` for every row/object. Avatar selection operations go through FastAPI with the same user JWT and rely on the existing owner-only profile RLS policy.
 3. On clothing upload, the browser sends the original file and user JWT to FastAPI. FastAPI validates the JWT through `/auth/v1/user`, then Pillow rotates, resizes, strips EXIF, and encodes WebP.
 4. React uploads that WebP directly to the private bucket at `<user-uuid>/<random-uuid>.webp`. It inserts the remaining clothing metadata and path into `clothing_items`; the SQL check and RLS policy require the caller's UUID.
-5. Clothes, outfits, profiles, and photos are fetched only under the current user's session. Photo display uses short-lived signed URLs. No AI or recommendation processing is involved.
-6. Test two users: each should see/edit only their own rows, cannot read or delete the other's image, and cannot link the other's clothing into an outfit.
+5. The frontend maps the saved `profiles.avatar_id` to a bundled illustration under `public/avatars/`. FastAPI accepts only the documented built-in IDs; no avatar image is uploaded or stored.
+6. Clothes, outfits, profiles, and clothing photos are fetched only under the current user's session. Clothing photo display uses short-lived signed URLs. No AI or recommendation processing is involved.
+7. Test two users: each should see/edit only their own rows, cannot read or delete the other's image, and cannot link the other's clothing into an outfit.
+
+## 6. Built-in avatar API
+
+- `GET /api/profile/avatar` returns `{"avatar_id":"fern"}` for the authenticated profile.
+- `PUT /api/profile/avatar` accepts `{"avatar_id":"indigo"}`. FastAPI validates the ID against the bundled set, scopes the PostgREST update to the authenticated user's `profiles.id`, and returns the saved ID.
+- No image or file upload is accepted by these avatar routes. The frontend resolves the ID to a local SVG asset.
+- Errors use FastAPI's `{"detail":"..."}` shape. Invalid IDs return `422`; missing/expired authentication returns `401`; missing profile returns `404`; upstream database failures return `502`.
 
 The service-role key is neither required nor used. Keep `.env.local` and `backend/.env` out of source control. Review Supabase backups, region, email settings, retention, and India-specific legal/grievance obligations before real-user launch. The supplied legal copy is not legal advice or a compliance certification.

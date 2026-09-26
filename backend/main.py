@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, NamedTuple, get_args
 
 import httpx
 from dotenv import load_dotenv
@@ -12,6 +13,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pydantic import BaseModel
 
 BACKEND_ENV_FILE = Path(__file__).resolve().parent / ".env"
 load_dotenv(BACKEND_ENV_FILE, override=False)
@@ -24,13 +26,16 @@ APP_ORIGINS = [
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 20_000_000
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
+AvatarId = Literal["fern", "terracotta", "sage", "indigo", "ochre"]
+ALLOWED_AVATAR_IDS = get_args(AvatarId)
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title="The Fold Image API", version="0.2.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="The Fold API", version="0.3.0", docs_url=None, redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=APP_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -68,14 +73,19 @@ def supabase_config() -> tuple[str, str]:
     return url, publishable_key
 
 
-def authenticated_user_id(
+class AuthenticatedUser(NamedTuple):
+    user_id: str
+    access_token: str
+
+
+def authenticated_user(
     authorization: Annotated[str | None, Header()] = None,
-) -> str:
+) -> AuthenticatedUser:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Sign in to upload a photo.")
+        raise HTTPException(status_code=401, detail="Sign in to continue.")
     access_token = authorization.removeprefix("Bearer ").strip()
     if not access_token:
-        raise HTTPException(status_code=401, detail="Sign in to upload a photo.")
+        raise HTTPException(status_code=401, detail="Sign in to continue.")
 
     supabase_url, publishable_key = supabase_config()
     try:
@@ -101,7 +111,93 @@ def authenticated_user_id(
         user_id = result.json()["id"]
     except (KeyError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=502, detail="Supabase returned an invalid user session.") from exc
-    return str(user_id)
+    return AuthenticatedUser(str(user_id), access_token)
+
+
+def authenticated_user_id(
+    authenticated: Annotated[AuthenticatedUser, Depends(authenticated_user)],
+) -> str:
+    return authenticated.user_id
+
+
+def supabase_user_headers(authenticated: AuthenticatedUser) -> dict[str, str]:
+    _, publishable_key = supabase_config()
+    return {
+        "apikey": publishable_key,
+        "Authorization": f"Bearer {authenticated.access_token}",
+    }
+
+
+def supabase_error(response: httpx.Response, operation: str) -> None:
+    if 200 <= response.status_code < 300:
+        return
+    if response.status_code == 401:
+        raise HTTPException(status_code=401, detail="Your session expired. Sign in again.")
+    logger.warning("Supabase %s request failed with status %s", operation, response.status_code)
+    raise HTTPException(status_code=502, detail=f"Supabase could not {operation}. Please retry.")
+
+
+class AvatarUpdate(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    avatar_id: AvatarId
+
+
+def get_profile_avatar_id(authenticated: AuthenticatedUser) -> str:
+    supabase_url, _ = supabase_config()
+    try:
+        response = httpx.get(
+            f"{supabase_url}/rest/v1/profiles",
+            params={"select": "avatar_id", "id": f"eq.{authenticated.user_id}"},
+            headers=supabase_user_headers(authenticated),
+            timeout=8.0,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("Profile avatar selection read request failed")
+        raise HTTPException(status_code=502, detail="Could not read your avatar selection. Please retry.") from exc
+    supabase_error(response, "read your profile")
+    try:
+        rows = response.json()
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Supabase returned an invalid profile response.") from exc
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=502, detail="Supabase returned an invalid profile response.")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Your profile could not be found.")
+    if not isinstance(rows[0], dict):
+        raise HTTPException(status_code=502, detail="Supabase returned an invalid profile response.")
+    avatar_id = rows[0].get("avatar_id")
+    if avatar_id not in ALLOWED_AVATAR_IDS:
+        logger.error("Profile row contains an unsupported built-in avatar identifier")
+        raise HTTPException(status_code=409, detail="Your saved avatar selection is invalid.")
+    return avatar_id
+
+
+def update_profile_avatar_id(authenticated: AuthenticatedUser, avatar_id: str) -> bool:
+    supabase_url, _ = supabase_config()
+    try:
+        response = httpx.patch(
+            f"{supabase_url}/rest/v1/profiles",
+            params={"id": f"eq.{authenticated.user_id}"},
+            headers={
+                **supabase_user_headers(authenticated),
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json={"avatar_id": avatar_id},
+            timeout=8.0,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("Profile avatar selection update request failed")
+        raise HTTPException(status_code=502, detail="Could not save your avatar selection. Please retry.") from exc
+    supabase_error(response, "save your avatar selection")
+    try:
+        rows = response.json()
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Supabase returned an invalid profile update response.") from exc
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=502, detail="Supabase returned an invalid profile update response.")
+    return bool(rows)
 
 
 def compress_image(data: bytes) -> bytes:
@@ -141,6 +237,23 @@ def compress_image(data: bytes) -> bytes:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/profile/avatar")
+def get_profile_avatar(
+    authenticated: Annotated[AuthenticatedUser, Depends(authenticated_user)],
+) -> dict[str, str]:
+    return {"avatar_id": get_profile_avatar_id(authenticated)}
+
+
+@app.put("/api/profile/avatar")
+def update_profile_avatar(
+    authenticated: Annotated[AuthenticatedUser, Depends(authenticated_user)],
+    selection: AvatarUpdate,
+) -> dict[str, str]:
+    if not update_profile_avatar_id(authenticated, selection.avatar_id):
+        raise HTTPException(status_code=404, detail="Your profile could not be found.")
+    return {"avatar_id": selection.avatar_id}
 
 
 @app.post("/api/images/compress", response_class=Response)

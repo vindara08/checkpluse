@@ -8,6 +8,14 @@ const TERMS_VERSION = '1.0'
 const PRIVACY_VERSION = '1.0'
 const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories']
 const categoryOptions = categories.slice(1)
+const BUILT_IN_AVATARS = [
+  { id: 'fern', label: 'Fern', src: '/avatars/fold-fern.svg' },
+  { id: 'terracotta', label: 'Terracotta', src: '/avatars/fold-terracotta.svg' },
+  { id: 'sage', label: 'Sage', src: '/avatars/fold-sage.svg' },
+  { id: 'indigo', label: 'Indigo', src: '/avatars/fold-indigo.svg' },
+  { id: 'ochre', label: 'Ochre', src: '/avatars/fold-ochre.svg' },
+]
+const DEFAULT_AVATAR_ID = 'fern'
 const AUTH_CHECK_TIMEOUT_MS = 15000
 const WARDROBE_LOAD_TIMEOUT_MS = 30000
 
@@ -30,6 +38,27 @@ function createObjectId() {
 
 function Mark() {
   return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
+}
+
+function AvatarImage({ value, initials, className = 'profile-avatar' }) {
+  const [failedValue, setFailedValue] = useState(null)
+  const avatar = BUILT_IN_AVATARS.find((choice) => choice.id === value) || BUILT_IN_AVATARS[0]
+  const failed = failedValue === avatar.id
+  return <span className={className} aria-label={`${avatar.label} avatar`}>
+    {!failed ? <img src={avatar.src} alt="" onError={() => setFailedValue(avatar.id)} /> : initials}
+  </span>
+}
+
+async function requestProfileAvatar(session, method, avatarId) {
+  const options = { method, headers: { Authorization: `Bearer ${session.access_token}` } }
+  if (avatarId) {
+    options.headers['Content-Type'] = 'application/json'
+    options.body = JSON.stringify({ avatar_id: avatarId })
+  }
+  const response = await fetch(`${API}/profile/avatar`, options)
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.detail || 'Could not update your avatar.')
+  return payload
 }
 
 function LoadingError({ message, onRetry }) {
@@ -175,11 +204,16 @@ function Auth({ onSignedIn }) {
   return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> Your photos stay private. No AI, no ads, no recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
 }
 
-function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile', onNavigate, onBack, onSaved, onPrivacy, onExport, onLogout, onDelete }) {
+function ProfilePage({ profile, email, session, theme, onThemeChange, section = 'profile', onNavigate, onBack, onSaved, onAvatarSaved, onPrivacy, onExport, onLogout, onDelete }) {
   const [name, setName] = useState(profile?.full_name || '')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState(null)
+  const [avatarError, setAvatarError] = useState('')
+  const [avatarSaved, setAvatarSaved] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -188,13 +222,36 @@ function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile'
     try {
       const { data, error: updateError } = await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', profile.id).select().single()
       if (updateError) throw updateError
-      onSaved(data)
+      onSaved({ ...profile, ...data })
       setSaved(true)
     } catch (err) {
       setError(err.message)
     } finally {
       setBusy(false)
     }
+  }
+  async function saveAvatar() {
+    const avatarId = selectedAvatar || profile?.avatar_id || DEFAULT_AVATAR_ID
+    if (avatarId === (profile?.avatar_id || DEFAULT_AVATAR_ID)) return
+    setAvatarError('')
+    setAvatarSaved(false)
+    setAvatarBusy(true)
+    try {
+      const data = await requestProfileAvatar(session, 'PUT', avatarId)
+      onAvatarSaved({ ...profile, avatar_id: data.avatar_id })
+      setSelectedAvatar(null)
+      setAvatarSaved(true)
+      setAvatarOpen(false)
+    } catch (err) {
+      setAvatarError(err.message || 'Could not save your avatar.')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+  function cancelAvatarEdit() {
+    setAvatarOpen(false)
+    setSelectedAvatar(null)
+    setAvatarError('')
   }
   return <main className="profile-page">
     <button className="text-button back-link" onClick={onBack}>← Back to wardrobe</button>
@@ -204,9 +261,26 @@ function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile'
     <ProfileSectionNav active={section} onNavigate={onNavigate} />
     {section === 'profile' && <>
       <section className="profile-summary">
-        <span className="profile-avatar">{(name || email || '?').slice(0, 1).toUpperCase()}</span>
+        <div className="profile-avatar-control">
+          <AvatarImage value={profile?.avatar_id} initials={(name || email || '?').slice(0, 1).toUpperCase()} />
+          <button className="avatar-edit-button" type="button" onClick={() => { setAvatarOpen((open) => !open); setSelectedAvatar(null); setAvatarError(''); setAvatarSaved(false) }} aria-expanded={avatarOpen} aria-label="Change avatar">✎</button>
+        </div>
         <div><strong>{name || 'Your name'}</strong><span>{email}</span></div>
       </section>
+      {avatarOpen && <section className="avatar-picker" aria-label="Choose avatar">
+        <div className="profile-section-title"><strong>Choose your avatar</strong><span>Select an illustration for your profile.</span></div>
+        <div className="avatar-choice-grid" role="radiogroup" aria-label="Built-in avatars">
+          {BUILT_IN_AVATARS.map((avatar) => <button key={avatar.id} className={`avatar-choice${(selectedAvatar || profile?.avatar_id || DEFAULT_AVATAR_ID) === avatar.id ? ' selected' : ''}`} type="button" role="radio" aria-checked={(selectedAvatar || profile?.avatar_id || DEFAULT_AVATAR_ID) === avatar.id} onClick={() => { setSelectedAvatar(avatar.id); setAvatarError(''); setAvatarSaved(false) }}>
+            <img src={avatar.src} alt="" /><span>{avatar.label}</span>
+          </button>)}
+        </div>
+        {avatarError && <p className="form-error" role="alert">{avatarError}</p>}
+        <div className="avatar-picker-actions">
+          <button className="button button-quiet" type="button" disabled={avatarBusy} onClick={cancelAvatarEdit}>Cancel</button>
+          <button className="button button-primary" type="button" disabled={avatarBusy || (selectedAvatar || profile?.avatar_id || DEFAULT_AVATAR_ID) === (profile?.avatar_id || DEFAULT_AVATAR_ID)} onClick={saveAvatar}>{avatarBusy ? 'Saving…' : 'Save avatar'}</button>
+        </div>
+      </section>}
+      {avatarSaved && <p className="profile-saved" role="status">Avatar saved.</p>}
       <form className="profile-form" onSubmit={submit}>
         <div className="profile-section-title"><strong>Personal details</strong><span>Update the name shown with your wardrobe.</span></div>
         <label>Full name<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} autoComplete="name" /></label>
@@ -223,7 +297,7 @@ function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile'
       <button className="button button-outline" type="button" onClick={onLogout}>Sign out of this session</button>
     </section>}
     {section === 'account' && <>
-      <section className="profile-summary"><span className="profile-avatar">{(name || email || '?').slice(0, 1).toUpperCase()}</span><div><strong>{name || 'Your name'}</strong><span>{email}</span></div></section>
+      <section className="profile-summary"><AvatarImage value={profile?.avatar_id} initials={(name || email || '?').slice(0, 1).toUpperCase()} /><div><strong>{name || 'Your name'}</strong><span>{email}</span></div></section>
       <section className="profile-options profile-account-actions">
         <div className="profile-section-title"><strong>Data and account actions</strong><span>Download a copy of your data or close your account.</span></div>
         <button className="profile-action" type="button" onClick={onExport}><span><strong>Download your data</strong><small>Save a copy of your wardrobe and account details.</small></span><Icon name="arrow" /></button>
@@ -476,10 +550,12 @@ export default function WardrobeApp() {
   const busyStartedAtRef = useRef(null)
   const refreshAttemptRef = useRef(0)
   const refreshInFlightRef = useRef(null)
+  const avatarRevisionRef = useRef(0)
   const lastWardrobeRefreshRef = useRef(0)
   const lastVisibilityCheckRef = useRef(0)
   const user = session?.user
   const userId = user?.id
+  const accessToken = session?.access_token
   useEffect(() => {
     window.localStorage.setItem('the-fold-theme', theme)
   }, [theme])
@@ -492,6 +568,7 @@ export default function WardrobeApp() {
     const nextUserId = nextSession?.user.id ?? null
     if (activeUserId.current !== nextUserId) {
       activeUserId.current = nextUserId
+      avatarRevisionRef.current += 1
       refreshAttemptRef.current += 1
       updateBusy(Boolean(nextUserId))
       setLoadingError('')
@@ -517,13 +594,29 @@ export default function WardrobeApp() {
       setProfile(profileResult.data)
       setLoadingError('')
       lastWardrobeRefreshRef.current = Date.now()
+      const avatarRevision = avatarRevisionRef.current
+      withTimeout(
+        requestProfileAvatar({ access_token: accessToken }, 'GET'),
+        8000,
+        'Loading your avatar took too long.',
+      ).then((avatar) => {
+        if (activeUserId.current === userId && refreshAttemptRef.current === attempt && avatarRevisionRef.current === avatarRevision) {
+          setProfile((current) => current?.id === userId ? { ...current, ...avatar, avatarLoadError: '' } : current)
+        }
+      }).catch((error) => {
+        if (activeUserId.current === userId && refreshAttemptRef.current === attempt && avatarRevisionRef.current === avatarRevision) {
+          setProfile((current) => current?.id === userId
+            ? { ...current, avatarLoadError: error.message || 'Could not load your avatar.' }
+            : current)
+        }
+      })
     })()
     const trackedRequest = request.finally(() => {
       if (refreshInFlightRef.current?.promise === trackedRequest) refreshInFlightRef.current = null
     })
     refreshInFlightRef.current = { userId, promise: trackedRequest, startedAt: Date.now() }
     return trackedRequest
-  }, [userId])
+  }, [accessToken, userId])
 
   useEffect(() => {
     if (!supabaseConfigured) return undefined
@@ -668,7 +761,9 @@ export default function WardrobeApp() {
         supabase.from('consent_records').select('consent_type,version,accepted_at').eq('user_id', userId),
       ])
       for (const result of [items, savedOutfits, links, consent]) if (result.error) throw result.error
-      const payload = { profile, consent: consent.data, clothing: items.data, outfits: savedOutfits.data.map((outfit) => ({ ...outfit, clothing_ids: links.data.filter((link) => link.outfit_id === outfit.id).sort((a, b) => a.position - b.position).map((link) => link.clothing_id) })), exported_at: new Date().toISOString() }
+      const exportProfile = { ...(profile || {}) }
+      delete exportProfile.avatarLoadError
+      const payload = { profile: exportProfile, consent: consent.data, clothing: items.data, outfits: savedOutfits.data.map((outfit) => ({ ...outfit, clothing_ids: links.data.filter((link) => link.outfit_id === outfit.id).sort((a, b) => a.position - b.position).map((link) => link.clothing_id) })), exported_at: new Date().toISOString() }
       const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
       const link = document.createElement('a')
       link.href = url
@@ -685,7 +780,13 @@ export default function WardrobeApp() {
       for (let offset = 0; ; offset += 100) {
         const { data, error } = await supabase.storage.from(BUCKET).list(userId, { limit: 100, offset })
         if (error) throw error
-        objects.push(...data.map((object) => `${userId}/${object.name}`))
+        objects.push(...data.filter((object) => object.id).map((object) => `${userId}/${object.name}`))
+        if (data.length < 100) break
+      }
+      for (let offset = 0; ; offset += 100) {
+        const { data, error } = await supabase.storage.from(BUCKET).list(`${userId}/avatars`, { limit: 100, offset })
+        if (error) throw error
+        objects.push(...data.filter((object) => object.id).map((object) => `${userId}/avatars/${object.name}`))
         if (data.length < 100) break
       }
       for (let offset = 0; offset < objects.length; offset += 100) {
@@ -744,6 +845,10 @@ export default function WardrobeApp() {
   const profileSection = ['profile', 'security', 'account'].includes(page) ? page : ''
   const navigateProfileSection = (section) => setPage(section)
   const profileNav = (next) => next === 'profile' || next === 'security' || next === 'account' ? navigateProfileSection(next) : setPage(next)
+  const saveAvatarToProfile = (nextProfile) => {
+    avatarRevisionRef.current += 1
+    setProfile(nextProfile)
+  }
   const closeAccountMenu = () => setMenuOpen(false)
   const navigateAccountMenu = (section) => { closeAccountMenu(); setPage(section) }
   const exportFromMenu = () => { closeAccountMenu(); exportData() }
@@ -753,7 +858,7 @@ export default function WardrobeApp() {
     <SecondaryMenu open={menuOpen} onToggle={() => setMenuOpen((current) => !current)} onNavigate={navigateAccountMenu} onExport={exportFromMenu} onLogout={logoutFromMenu} />
   </header>
   if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
-  if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
+  if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} session={session} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onAvatarSaved={saveAvatarToProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy') return <LegalPage privacy onBack={() => setPage(user ? 'app' : 'auth')} />
   if (!session) return <Auth onSignedIn={applySession} />
@@ -774,7 +879,7 @@ export default function WardrobeApp() {
           <button className={view === 'wardrobe' ? 'nav-active' : ''} onClick={() => navigate('wardrobe')}>Wardrobe <span>{clothes.length}</span></button>
           <button className={view === 'outfits' ? 'nav-active' : ''} onClick={() => navigate('outfits')}>Outfits <span>{outfits.length}</span></button>
         </nav>
-        <div className="account-menu"><button className="account-trigger" onClick={() => navigate('profile')} aria-label="Open profile"><span className="user-avatar">{displayName?.slice(0, 1).toUpperCase()}</span><span className="user-email">{displayName}</span></button><ThemeToggle theme={theme} onChange={setTheme} /><SecondaryMenu open={menuOpen} onToggle={() => setMenuOpen((current) => !current)} onNavigate={navigateAccountMenu} onExport={exportFromMenu} onLogout={logoutFromMenu} /></div>
+        <div className="account-menu"><button className="account-trigger" onClick={() => navigate('profile')} aria-label="Open profile"><AvatarImage className="user-avatar" value={profile?.avatar_id} initials={displayName?.slice(0, 1).toUpperCase()} /><span className="user-email">{displayName}</span></button><ThemeToggle theme={theme} onChange={setTheme} /><SecondaryMenu open={menuOpen} onToggle={() => setMenuOpen((current) => !current)} onNavigate={navigateAccountMenu} onExport={exportFromMenu} onLogout={logoutFromMenu} /></div>
       </header>
       <main className="workspace">
         {loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}
@@ -806,5 +911,4 @@ export default function WardrobeApp() {
   }
 
   const visible = filter === 'All' ? clothes : clothes.filter((item) => item.category === filter)
-  return <div className="app-shell"><header className="topbar"><button className="wordmark" onClick={() => { setPage('app'); setView('wardrobe') }}><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></button><nav className="top-nav"><button className={view === 'wardrobe' ? 'nav-active' : ''} onClick={() => setView('wardrobe')}>Wardrobe <span>{clothes.length}</span></button><button className={view === 'outfits' ? 'nav-active' : ''} onClick={() => setView('outfits')}>Outfits <span>{outfits.length}</span></button></nav><div className="account-menu"><span className="user-avatar">{(profile?.full_name || user.email)?.slice(0, 1).toUpperCase()}</span><span className="user-email">{profile?.full_name || user.email}</span><details><summary aria-label="Account menu">···</summary><div className="account-dropdown"><button onClick={() => setPage('profile')}>Your profile</button><button onClick={exportData}>Export my data</button><button onClick={() => setPage('privacy')}>Privacy notice</button><button onClick={logout}>Sign out</button><button className="danger-action" onClick={deleteAccount}>Delete account</button></div></details></div></header><main className="workspace"><div className="page-heading"><div><div className="eyebrow">{view === 'wardrobe' ? 'A CLEARER VIEW OF WHAT YOU OWN' : 'MADE FROM WHAT YOU HAVE'}</div><h1>{view === 'wardrobe' ? 'Your wardrobe' : 'Saved outfits'}<span className="heading-count">{view === 'wardrobe' ? clothes.length : outfits.length}</span></h1><p>{view === 'wardrobe' ? 'Every piece, in its place.' : 'Looks worth coming back to.'}</p></div><div className="heading-actions">{view === 'wardrobe' && <button className="button button-outline" onClick={() => setModal('outfit')} disabled={!clothes.length}>＋ Build an outfit</button>}<button className="button button-primary" onClick={() => setModal('add')}>＋ Add a piece</button></div></div>{notice && <div className="notice" role="status">{notice}<button className="text-button" onClick={() => setNotice('')}>Dismiss</button></div>}{view === 'wardrobe' ? <><div className="filter-row" role="group" aria-label="Filter by category">{categories.map((category) => <button key={category} className={`filter-chip${filter === category ? ' selected' : ''}`} onClick={() => setFilter(category)}>{category}{category === 'All pieces' && <span>{clothes.length}</span>}</button>)}</div>{visible.length ? <div className="clothing-grid">{visible.map((item) => <ClothingCard key={item.id} item={item} onDelete={removeClothing} onDragStart={(event, piece) => event.dataTransfer.setData('text/plain', String(piece.id))} />)}</div> : <section className="empty-state"><div className="empty-art"><div className="empty-hanger" /><div className="empty-shirt" /><div className="empty-trouser" /></div><div className="eyebrow">A LITTLE SPACE TO START</div><h2>{filter === 'All pieces' ? 'Your wardrobe starts here.' : `No ${filter.toLowerCase()} yet.`}</h2><p>Add a photo and the details you care about. Your pieces stay private.</p><button className="button button-primary" onClick={() => setModal('add')}>＋ Add your first piece</button></section>}</> : <section className="outfits-view">{outfits.length ? <div className="saved-outfit-grid">{outfits.map((outfit) => <article className="saved-outfit" key={outfit.id}><div className="saved-outfit-images">{outfit.items.slice(0, 3).map((item) => <img key={item.id} src={item.image_url} alt="" />)}</div><div className="saved-outfit-caption"><strong>{outfit.name}</strong><span>{outfit.items.length} {outfit.items.length === 1 ? 'piece' : 'pieces'}</span></div></article>)}</div> : <section className="empty-state"><div className="eyebrow">A LOOK OF YOUR OWN</div><h2>No outfits saved yet.</h2><p>Drag pieces from your wardrobe onto a canvas and save a combination.</p><button className="button button-primary" onClick={() => setView('wardrobe')}>View wardrobe</button></section>}</section>}</main><footer className="workspace-footer"><span>YOUR PHOTOS ARE PRIVATE · NO AI · NO ADS</span><button className="text-button" onClick={() => setPage('privacy')}>Privacy &amp; data</button></footer>{modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setFilter('All pieces') }} />}{modal === 'outfit' && <OutfitBuilder clothes={clothes} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setView('outfits') }} />}</div>
 }

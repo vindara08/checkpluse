@@ -966,17 +966,24 @@ textarea:focus-visible {
     position: fixed;
     z-index: 20;
     inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    align-items: safe center;
+    overflow-y: auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
     background: #14261f99;
     animation: fade .16s ease both;
 }
 
 .modal-panel {
     width: min(100%, 640px);
-    max-height: min(90vh, 900px);
+    min-height: 0;
+    max-height: min(calc(100dvh - 40px), 900px);
+    flex: 0 1 auto;
+    margin-block: auto;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 26px;
     border: 1px solid #e0e6df;
     border-radius: 5px;
@@ -1594,13 +1601,13 @@ textarea:focus-visible {
     }
 
     .modal-scrim {
-        place-items: end center;
+        align-items: flex-end;
         padding: 0;
     }
 
     .modal-panel {
         width: 100%;
-        max-height: 94svh;
+        max-height: 94dvh;
         padding: 20px 17px;
         border-radius: 7px 7px 0 0;
     }
@@ -1732,6 +1739,7 @@ textarea:focus-visible {
 .theme-dark .profile-summary,
 .theme-dark .profile-form,
 .theme-dark .profile-options,
+.theme-dark .avatar-picker,
 .theme-dark .home-stat,
 .theme-dark .saved-outfit {
     border-color: var(--line);
@@ -2455,7 +2463,7 @@ textarea:focus-visible {
     .add-scrim {
         height: 100dvh;
         min-height: 0;
-        align-items: end;
+        align-items: flex-end;
     }
 
     .add-panel {
@@ -2570,7 +2578,8 @@ textarea:focus-visible {
 
 .profile-summary,
 .profile-options,
-.profile-tool-card {
+.profile-tool-card,
+.avatar-picker {
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--paper);
@@ -2596,7 +2605,97 @@ textarea:focus-visible {
     font: 18px var(--mono);
 }
 
-.profile-summary > div,
+.profile-avatar img,
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    object-fit: cover;
+}
+
+.profile-avatar-control {
+    position: relative;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    display: block !important;
+}
+
+.profile-avatar-control .profile-avatar {
+    width: 54px;
+    height: 54px;
+}
+
+.avatar-edit-button {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--paper);
+    border-radius: 50%;
+    color: #fff;
+    background: var(--green);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.avatar-picker {
+    margin: -4px 0 18px;
+    padding: 17px;
+}
+
+.avatar-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.avatar-choice {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 7px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 10px 5px;
+    color: var(--muted);
+    background: var(--canvas);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.avatar-choice img {
+    width: clamp(38px, 5vw, 54px);
+    height: clamp(38px, 5vw, 54px);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.avatar-choice.selected {
+    border-color: var(--green);
+    color: var(--ink);
+    box-shadow: 0 0 0 1px var(--green);
+}
+
+.avatar-picker-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 14px;
+}
+
+.avatar-picker-actions .button {
+    max-width: 100%;
+    white-space: normal;
+}
+
+.profile-summary > div:not(.profile-avatar-control),
 .profile-action > span {
     min-width: 0;
     display: grid;
@@ -2609,7 +2708,7 @@ textarea:focus-visible {
     font-size: 14px;
 }
 
-.profile-summary > div > span,
+.profile-summary > div:not(.profile-avatar-control) > span,
 .profile-action small {
     overflow-wrap: anywhere;
     color: var(--muted);
@@ -2707,6 +2806,10 @@ textarea:focus-visible {
 
     .account-menu {
         gap: 7px;
+    }
+
+    .avatar-choice-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .account-menu .secondary-menu {
