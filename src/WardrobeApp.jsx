@@ -6,15 +6,67 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'wardrobe-images'
 const TERMS_VERSION = '1.0'
 const PRIVACY_VERSION = '1.0'
-const categories = ['All pieces', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories']
+const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories']
 const categoryOptions = categories.slice(1)
+const AUTH_CHECK_TIMEOUT_MS = 15000
+const WARDROBE_LOAD_TIMEOUT_MS = 30000
+
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId))
+}
+
+function createObjectId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0'))
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`
+}
 
 function Mark() {
   return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
 }
 
-function LegalPage({ privacy = false, onBack, onPrivacy }) {
-  return <main className="legal-page"><button className="text-button back-link" onClick={onBack}>← Back to account</button><div className="eyebrow">THE FOLD / {privacy ? 'PRIVACY' : 'YOUR ACCOUNT'}</div><h1>{privacy ? 'Your wardrobe stays yours.' : 'Terms & conditions'}</h1><p className="legal-intro">{privacy ? 'A plain-language notice about personal data for The Fold.' : 'A straightforward agreement for keeping your personal wardrobe in one place.'}</p>
+function LoadingError({ message, onRetry }) {
+  return <div className="notice load-error" role="alert"><span>{message}</span><button className="button button-outline" onClick={onRetry}>Retry</button></div>
+}
+
+function ThemeToggle({ theme, onChange }) {
+  const nextTheme = theme === 'dark' ? 'light' : 'dark'
+  return <button className="theme-toggle" type="button" onClick={() => onChange(nextTheme)} aria-label={`Switch to ${nextTheme} theme`}>
+    <span aria-hidden="true">{theme === 'dark' ? '☼' : '◐'}</span>
+    <span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+  </button>
+}
+
+function Icon({ name }) {
+  const paths = {
+    home: <><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9M9 20v-7h6v7" /></>,
+    wardrobe: <><path d="M4 4h16v16H4z" /><path d="M8 4v16M16 4v16" /></>,
+    add: <><path d="M12 5v14M5 12h14" /></>,
+    outfits: <><path d="M4 5h16v15H4z" /><path d="m4 15 5-5 4 4 3-3 4 4M8 8h.01" /></>,
+    profile: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6" /></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
+    arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
+  }
+  return <svg className="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.wardrobe}</svg>
+}
+
+function ProfileSectionNav({ active, onNavigate }) {
+  return <nav className="profile-section-nav" aria-label="Profile sections">
+    {[['profile', 'Profile'], ['security', 'Security'], ['account', 'Account'], ['privacy', 'Privacy']].map(([section, label]) =>
+      <button key={section} className={active === section ? 'active' : ''} aria-current={active === section ? 'page' : undefined} onClick={() => onNavigate(section)}>{label}</button>
+    )}
+  </nav>
+}
+
+function LegalPage({ privacy = false, onBack, onPrivacy, activeSection, onSectionNavigate }) {
+  return <main className={`legal-page${activeSection ? ' profile-document' : ''}`}><button className="text-button back-link" onClick={onBack}>← Back to account</button><div className="eyebrow">THE FOLD / {privacy ? 'PRIVACY' : 'TERMS'}</div>{activeSection && <ProfileSectionNav active={activeSection} onNavigate={onSectionNavigate} />}<h1>{privacy ? 'Your wardrobe stays yours.' : 'Terms & conditions'}</h1><p className="legal-intro">{privacy ? 'A plain-language notice about personal data for The Fold.' : 'A straightforward agreement for keeping your personal wardrobe in one place.'}</p>
     {privacy ? <><section><h2>What we collect and why</h2><p>Your email, name and consent records support your account. Clothing photos and details are used to show your wardrobe and saved outfits. V0 has no advertising, analytics, precise location, or contacts collection.</p></section><section><h2>Where it is stored</h2><p>Account and wardrobe data are stored in Supabase Postgres. Compressed photos are stored in a private Supabase Storage bucket. Row-level security limits access to the signed-in account; FastAPI/Pillow only compresses an image after validating its Supabase session.</p></section><section><h2>Your choices and rights</h2><p>You can export your account data, update your name and clothing details, or delete your account. Account deletion also requests removal of your stored photos. Contact: <strong>Set PRIVACY_CONTACT_EMAIL before launch.</strong></p></section><section><h2>Security and retention</h2><p>Supabase Auth manages passwords and sessions. Images are re-encoded to strip embedded metadata. Data is kept while your account is active and removed on account deletion, subject to technical backup retention and records required by law.</p></section><section><h2>India</h2><p>The implementation supports data minimisation, purpose limitation, safeguards, consent records, and user control. The operator must confirm current DPDP Act and Rules obligations, retention requirements, grievance contact, and any transfer practices with qualified counsel before launch.</p></section><p className="legal-footnote">Privacy notice version 1.0 · Effective 26 September 2026</p></> : <><section><h2>Using The Fold</h2><p>The Fold is a private tool for cataloguing clothing and saving outfits. You must be at least 18 years old to create an account. Keep your sign-in details confidential and tell us promptly if you suspect unauthorised access.</p></section><section><h2>Your content</h2><p>You retain ownership of photos and details you add. You allow us to store and display them only to provide the wardrobe and outfit features you request. Photos are compressed for storage; we do not use AI recognition, train models, or generate recommendations.</p></section><section><h2>Privacy and account closure</h2><p>We use account and wardrobe information only to provide the service and protect accounts. You can export your data or delete your account at any time. Deletion removes account records and associated photos. Read our <button className="inline-link" onClick={onPrivacy}>Privacy notice</button>.</p></section><section><h2>Availability and changes</h2><p>The service is provided as available and may change as this early version develops. We will give notice of material changes. You may stop using the service and delete your account at any time.</p></section><section><h2>Contact and complaints</h2><p>For support, privacy requests, or complaints, contact the operator using the address in the Privacy notice or deployment configuration. The operator should acknowledge and address complaints promptly.</p></section><p className="legal-footnote">Effective 26 September 2026 · Terms version 1.0</p><p className="legal-disclaimer">This starter text is not legal advice. Have final terms reviewed for actual operations in India.</p></>}
   </main>
 }
@@ -114,7 +166,7 @@ function Auth({ onSignedIn }) {
   return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> Your photos stay private. No AI, no ads, no recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
 }
 
-function ProfilePage({ profile, email, onBack, onSaved }) {
+function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile', onNavigate, onBack, onSaved, onPrivacy, onExport, onLogout, onDelete }) {
   const [name, setName] = useState(profile?.full_name || '')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -135,11 +187,109 @@ function ProfilePage({ profile, email, onBack, onSaved }) {
       setBusy(false)
     }
   }
-  return <main className="profile-page"><button className="text-button back-link" onClick={onBack}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Your profile</h1><p className="legal-intro">Manage the name shown with your wardrobe.</p><form className="profile-form" onSubmit={submit}><label>Full name<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} autoComplete="name" /></label><label>Email address<input value={email} readOnly /></label>{error && <p className="form-error" role="alert">{error}</p>}{saved && <p className="profile-saved" role="status">Profile saved.</p>}<button className="button button-primary" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save profile'}</button></form></main>
+  return <main className="profile-page">
+    <button className="text-button back-link" onClick={onBack}>← Back to wardrobe</button>
+    <div className="eyebrow">YOUR ACCOUNT</div>
+    <h1>{section === 'profile' ? 'Your profile' : section === 'security' ? 'Security' : 'Account'}</h1>
+    <p className="legal-intro">{section === 'profile' ? 'A few details, kept just for you.' : section === 'security' ? 'How sign-in and account access are handled.' : 'Your account details and data controls.'}</p>
+    <ProfileSectionNav active={section} onNavigate={onNavigate} />
+    {section === 'profile' && <>
+      <section className="profile-summary">
+        <span className="profile-avatar">{(name || email || '?').slice(0, 1).toUpperCase()}</span>
+        <div><strong>{name || 'Your name'}</strong><span>{email}</span></div>
+      </section>
+      <form className="profile-form" onSubmit={submit}>
+        <div className="profile-section-title"><strong>Personal details</strong><span>Update the name shown with your wardrobe.</span></div>
+        <label>Full name<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} autoComplete="name" /></label>
+        <label>Email address<input value={email} readOnly /><small>Email is managed securely by your sign-in provider.</small></label>
+        <div className="profile-preference"><span><strong>Appearance</strong><small>Choose light or dark mode.</small></span><ThemeToggle theme={theme} onChange={onThemeChange} /></div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {saved && <p className="profile-saved" role="status">Profile saved.</p>}
+        <button className="button button-primary" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save changes'}</button>
+      </form>
+    </>}
+    {section === 'security' && <section className="profile-tool-card">
+      <div className="profile-section-title"><strong>Sign-in security</strong><span>Your password and sign-in session are managed by Supabase Auth.</span></div>
+      <p>The Fold does not store or display your password. Use your sign-in provider’s account recovery flow if you need to reset it.</p>
+      <button className="button button-outline" type="button" onClick={onLogout}>Sign out of this session</button>
+    </section>}
+    {section === 'account' && <>
+      <section className="profile-summary"><span className="profile-avatar">{(name || email || '?').slice(0, 1).toUpperCase()}</span><div><strong>{name || 'Your name'}</strong><span>{email}</span></div></section>
+      <section className="profile-options profile-account-actions">
+        <div className="profile-section-title"><strong>Data and account actions</strong><span>Download a copy of your data or close your account.</span></div>
+        <button type="button" onClick={onExport}>Download your data <Icon name="arrow" /></button>
+        <button type="button" onClick={onPrivacy}>Privacy notice <Icon name="arrow" /></button>
+        <button type="button" onClick={onLogout}>Sign out <Icon name="arrow" /></button>
+        <button className="profile-danger" type="button" onClick={onDelete}>Delete account <Icon name="arrow" /></button>
+      </section>
+    </>}
+  </main>
 }
 
-function ClothingCard({ item, onDelete, onDragStart }) {
-  return <article className="clothing-card" draggable onDragStart={(event) => onDragStart(event, item)}><div className="clothing-image"><img src={item.image_url} alt={`${item.category}${item.color ? `, ${item.color}` : ''}`} loading="lazy" /><button className="icon-button delete-piece" title="Remove clothing" aria-label="Remove clothing" onClick={() => onDelete(item)}>×</button></div><div className="clothing-details"><div><strong>{item.category}</strong><span>{item.color || item.subcategory || 'Piece'}</span></div><span className="category-dot" /></div></article>
+function ClothingCard({ item, onDelete, onDragStart, onOpen }) {
+  return <article className="clothing-card" draggable onDragStart={(event) => onDragStart?.(event, item)}>
+    <div className="clothing-image">
+      <button className="clothing-image-button" onClick={() => onOpen(item)} aria-label={`View ${item.subcategory || item.category}`}>
+        <img src={item.image_url} alt={`${item.category}${item.color ? `, ${item.color}` : ''}`} loading="lazy" />
+      </button>
+      <button className="icon-button delete-piece" title="Remove clothing" aria-label="Remove clothing" onClick={() => onDelete(item)}>×</button>
+    </div>
+    <div className="clothing-details"><div><strong>{item.subcategory || item.category}</strong><span>{item.subcategory ? item.category : item.color || 'Piece'}</span></div></div>
+  </article>
+}
+
+function CategoryFilters({ active, onSelect, count }) {
+  return <div className="filter-row" role="group" aria-label="Filter by category">
+    {categories.map((category) => <button key={category} className={`filter-chip${active === category ? ' selected' : ''}`} aria-pressed={active === category} onClick={() => onSelect(category)}>
+      {category}{category === 'All' && <span>{count}</span>}
+    </button>)}
+  </div>
+}
+
+function EmptyState({ title, description, action, onAction }) {
+  return <section className="empty-state">
+    <div className="empty-art" aria-hidden="true"><div className="empty-hanger" /><div className="empty-shirt" /><div className="empty-trouser" /></div>
+    <h2>{title}</h2><p>{description}</p>
+    {action && <button className="button button-primary" onClick={onAction}>{action}<Icon name="arrow" /></button>}
+  </section>
+}
+
+function ClothingDetails({ item, onClose, onDelete }) {
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="modal-panel detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button className="icon-button close-button detail-close" aria-label="Close item details" onClick={onClose}>×</button>
+      <img className="detail-photo" src={item.image_url} alt={`${item.subcategory || item.category}${item.color ? `, ${item.color}` : ''}`} />
+      <div className="detail-copy"><span className="eyebrow">{item.category}</span><h2 id="detail-title">{item.subcategory || item.category}</h2>
+        <dl>{item.color && <div><dt>Color</dt><dd>{item.color}</dd></div>}{item.season && <div><dt>Season</dt><dd>{item.season}</dd></div>}{item.notes && <div><dt>Notes</dt><dd>{item.notes}</dd></div>}</dl>
+        <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-danger" onClick={() => { onClose(); onDelete(item) }}>Remove item</button></div>
+      </div>
+    </section>
+  </div>
+}
+
+function OutfitDetails({ outfit, onClose }) {
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="modal-panel outfit-detail-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-detail-title">
+      <div className="modal-heading"><div><span className="eyebrow">YOUR COMBINATION</span><h2 id="outfit-detail-title">{outfit.name}</h2></div><button className="icon-button close-button" aria-label="Close outfit details" onClick={onClose}>×</button></div>
+      <div className="outfit-detail-grid">{outfit.items.map((item) => <figure key={item.id}><img src={item.image_url} alt={item.subcategory || item.category} /><figcaption>{item.subcategory || item.category}</figcaption></figure>)}</div>
+      <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button></div>
+    </section>
+  </div>
+}
+
+function BottomNav({ view, page, onNavigate, onAdd }) {
+  const navItems = [
+    ['home', 'Home', () => { onNavigate('home') }],
+    ['wardrobe', 'Wardrobe', () => { onNavigate('wardrobe') }],
+    ['add', 'Add', onAdd],
+    ['outfits', 'Outfits', () => { onNavigate('outfits') }],
+    ['profile', 'Profile', () => { onNavigate('profile') }],
+  ]
+  return <nav className="bottom-nav" aria-label="Main navigation">
+    {navItems.map(([icon, label, action]) => <button key={label} className={`${icon === 'add' ? 'bottom-add' : ''}${(icon === 'profile' ? page === 'profile' : view === icon) ? ' active' : ''}`} aria-current={(icon === 'profile' ? page === 'profile' : view === icon) ? 'page' : undefined} onClick={action}>
+      <Icon name={icon} /><span>{label}</span>
+    </button>)}
+  </nav>
 }
 
 function AddClothing({ session, userId, onClose, onSaved }) {
@@ -152,6 +302,29 @@ function AddClothing({ session, userId, onClose, onSaved }) {
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [step, setStep] = useState(0)
+  useEffect(() => {
+    const body = document.body
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    }
+    const scrollY = window.scrollY
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.left = '0'
+    body.style.right = '0'
+    body.style.width = '100%'
+    body.style.overflow = 'hidden'
+    return () => {
+      Object.assign(body.style, previous)
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
   function chooseFile(next) {
     if (!next) return
     if (preview) URL.revokeObjectURL(preview)
@@ -162,10 +335,21 @@ function AddClothing({ session, userId, onClose, onSaved }) {
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
   async function submit(event) {
     event.preventDefault()
-    if (!file) { setError('Choose a photo to continue.'); return }
+    if (step === 0) {
+      if (!file) { setError('Choose a photo to continue.'); return }
+      setError('')
+      setStep(1)
+      return
+    }
+    if (step === 1) {
+      setError('')
+      setStep(2)
+      return
+    }
+    if (!file) { setStep(0); setError('Choose a photo to continue.'); return }
     setBusy(true)
     setError('')
-    const imagePath = `${userId}/${crypto.randomUUID()}.webp`
+    const imagePath = `${userId}/${createObjectId()}.webp`
     try {
       const compressed = await compressPhoto(file, session)
       const { error: uploadError } = await supabase.storage.from(BUCKET).upload(imagePath, compressed, { contentType: 'image/webp', cacheControl: '3600', upsert: false })
@@ -188,7 +372,33 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       setBusy(false)
     }
   }
-  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel add-panel" role="dialog" aria-modal="true" aria-labelledby="add-title"><div className="modal-heading"><div><div className="eyebrow">A NEW PIECE</div><h2 id="add-title">Add to your wardrobe</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><form onSubmit={submit}><label className={`upload-zone${preview ? ' has-preview' : ''}`}>{preview ? <img src={preview} alt="Selected clothing preview" /> : <><span className="upload-icon">＋</span><strong>Choose a photo or take one</strong><span>JPG, PNG or WebP · up to 8 MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} /></label><div className="form-grid"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label>Color<input value={color} onChange={(event) => setColor(event.target.value)} maxLength={40} placeholder="e.g. forest green" /></label><label>Type<input value={subcategory} onChange={(event) => setSubcategory(event.target.value)} maxLength={60} placeholder="e.g. linen shirt" /></label><label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option></select></label><label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={2} placeholder="Fit, fabric, or anything you want to remember" /></label></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy}>{busy ? 'Compressing & saving…' : 'Save piece'}</button></div></form></section></div>
+  return <div className="modal-scrim add-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel add-panel" data-step={step} role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div className="modal-heading"><div><div className="eyebrow">ADD TO YOUR WARDROBE · {String(step + 1).padStart(2, '0')} / 03</div><h2 id="add-title">{['Start with a photo', 'Add Details', 'Review your piece'][step]}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
+    <div className="step-track" aria-label={`Step ${step + 1} of 3`}><span className={step >= 0 ? 'complete' : ''} /><span className={step >= 1 ? 'complete' : ''} /><span className={step >= 2 ? 'complete' : ''} /></div>
+    <form onSubmit={submit} onFocus={(event) => { if (step === 1) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}>
+      {step === 0 && <div className="add-step">
+        <label className={`upload-zone${preview ? ' has-preview' : ''}`}>{preview ? <><img src={preview} alt="Selected clothing preview" /><span className="upload-change">Choose a different photo</span></> : <><span className="upload-icon">＋</span><strong>Choose a photo or take one</strong><span>JPG, PNG or WebP · up to 8 MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} /></label>
+        <p className="form-helper">A clear photo makes your digital closet easier to browse.</p>
+      </div>}
+      {step === 1 && <div className="form-grid add-step">
+        {preview && <img className="form-preview" src={preview} alt="Clothing preview" />}
+        <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Type<input value={subcategory} onChange={(event) => setSubcategory(event.target.value)} maxLength={60} placeholder="e.g. linen shirt" /></label>
+        <label>Color<input value={color} onChange={(event) => setColor(event.target.value)} maxLength={40} placeholder="e.g. forest green" /></label>
+        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option></select></label>
+        <label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={3} placeholder="Anything you want to remember" /></label>
+      </div>}
+      {step === 2 && <section className="add-review">
+        {preview && <img src={preview} alt="Clothing review" />}
+        <div><span className="eyebrow">READY TO SAVE</span><h3>{subcategory.trim() || category}</h3><p>{[category, color.trim(), season || 'Any season'].filter(Boolean).join(' · ')}</p>{notes.trim() && <p>{notes.trim()}</p>}</div>
+      </section>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="modal-actions add-actions">
+        <button type="button" className="button button-quiet" onClick={step ? () => setStep(step - 1) : onClose}>{step ? 'Back' : 'Cancel'}</button>
+        <button className="button button-primary" disabled={busy}>{busy ? 'Saving to your wardrobe…' : step === 2 ? 'Save to wardrobe' : 'Continue'}</button>
+      </div>
+    </form>
+  </section></div>
 }
 
 function OutfitBuilder({ clothes, userId, onClose, onSaved }) {
@@ -224,72 +434,179 @@ export default function WardrobeApp() {
   const [profile, setProfile] = useState(null)
   const [clothes, setClothes] = useState([])
   const [outfits, setOutfits] = useState([])
-  const [view, setView] = useState('wardrobe')
+  const [view, setView] = useState('home')
   const [page, setPage] = useState('app')
-  const [filter, setFilter] = useState('All pieces')
+  const [filter, setFilter] = useState('All')
+  const [search, setSearch] = useState('')
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [selectedOutfit, setSelectedOutfit] = useState(null)
+  const [theme, setTheme] = useState(() => window.localStorage.getItem('the-fold-theme') === 'dark' ? 'dark' : 'light')
   const [modal, setModal] = useState('')
   const [busy, setBusy] = useState(supabaseConfigured)
   const [notice, setNotice] = useState('')
+  const [loadingError, setLoadingError] = useState('')
   const activeUserId = useRef(null)
+  const busyRef = useRef(busy)
+  const busyStartedAtRef = useRef(null)
+  const refreshAttemptRef = useRef(0)
+  const refreshInFlightRef = useRef(null)
+  const lastWardrobeRefreshRef = useRef(0)
+  const lastVisibilityCheckRef = useRef(0)
   const user = session?.user
   const userId = user?.id
-  const applySession = useCallback((nextSession) => {
-    activeUserId.current = nextSession?.user.id ?? null
-    setSession(nextSession)
+  useEffect(() => {
+    window.localStorage.setItem('the-fold-theme', theme)
+  }, [theme])
+  const updateBusy = useCallback((nextBusy) => {
+    busyRef.current = nextBusy
+    if (nextBusy) busyStartedAtRef.current = Date.now()
+    setBusy(nextBusy)
   }, [])
+  const applySession = useCallback((nextSession) => {
+    const nextUserId = nextSession?.user.id ?? null
+    if (activeUserId.current !== nextUserId) {
+      activeUserId.current = nextUserId
+      refreshAttemptRef.current += 1
+      updateBusy(Boolean(nextUserId))
+      setLoadingError('')
+    }
+    setSession(nextSession)
+  }, [updateBusy])
 
   const refresh = useCallback(async () => {
     if (!userId) return
-    const [wardrobe, saved, profileResult] = await Promise.all([
-      loadClothing(userId),
-      loadOutfits(userId),
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-    ])
-    if (profileResult.error) throw profileResult.error
-    if (activeUserId.current !== userId) return
-    setClothes(wardrobe)
-    setOutfits(saved)
-    setProfile(profileResult.data)
+    if (refreshInFlightRef.current?.userId === userId) return refreshInFlightRef.current.promise
+
+    const attempt = ++refreshAttemptRef.current
+    const request = (async () => {
+      const [wardrobe, saved, profileResult] = await withTimeout(Promise.all([
+        loadClothing(userId),
+        loadOutfits(userId),
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+      ]), WARDROBE_LOAD_TIMEOUT_MS, 'Loading your wardrobe took too long. Check your connection and retry.')
+      if (profileResult.error) throw profileResult.error
+      if (activeUserId.current !== userId || refreshAttemptRef.current !== attempt) return
+      setClothes(wardrobe)
+      setOutfits(saved)
+      setProfile(profileResult.data)
+      setLoadingError('')
+      lastWardrobeRefreshRef.current = Date.now()
+    })()
+    const trackedRequest = request.finally(() => {
+      if (refreshInFlightRef.current?.promise === trackedRequest) refreshInFlightRef.current = null
+    })
+    refreshInFlightRef.current = { userId, promise: trackedRequest, startedAt: Date.now() }
+    return trackedRequest
   }, [userId])
 
   useEffect(() => {
     if (!supabaseConfigured) return undefined
     let active = true
-    supabase.auth.getSession().then(({ data, error }) => {
+    if (busyRef.current && busyStartedAtRef.current === null) busyStartedAtRef.current = Date.now()
+    withTimeout(supabase.auth.getSession(), AUTH_CHECK_TIMEOUT_MS, 'Checking your sign-in session took too long. Retry to continue.')
+      .then(({ data, error }) => {
       if (error) throw error
       if (active) {
+        setLoadingError('')
         applySession(data.session)
-        if (!data.session) setBusy(false)
+        if (!data.session) updateBusy(false)
       }
-    }).catch((error) => {
+      }).catch((error) => {
       if (active) {
-        setNotice(error.message)
-        setBusy(false)
+        setLoadingError(error.message || 'Could not check your sign-in session.')
+        if (!activeUserId.current) updateBusy(false)
       }
-    })
+      })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       applySession(nextSession)
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') setBusy(Boolean(nextSession))
+      if (event === 'INITIAL_SESSION') setLoadingError('')
+      if (event === 'INITIAL_SESSION' && !nextSession) updateBusy(false)
       if (!nextSession) {
-        setBusy(false)
+        updateBusy(false)
+        setLoadingError('')
         setProfile(null)
         setClothes([])
         setOutfits([])
       }
     })
     return () => { active = false; subscription.unsubscribe() }
-  }, [applySession])
+  }, [applySession, updateBusy])
 
   useEffect(() => {
     if (!userId) return undefined
     let active = true
     refresh().catch((error) => {
-      if (active) setNotice(error.message)
+      if (active) setLoadingError(error.message || 'Could not load your wardrobe.')
     }).finally(() => {
-      if (active) setBusy(false)
+      if (active) updateBusy(false)
     })
     return () => { active = false }
-  }, [userId, refresh])
+  }, [userId, refresh, updateBusy])
+
+  useEffect(() => {
+    let active = true
+    let checking = false
+    async function recoverWhenVisible() {
+      if (document.visibilityState !== 'visible' || checking) return
+      const now = Date.now()
+      if (now - lastVisibilityCheckRef.current < 15000) return
+      const currentBusy = busyRef.current
+      const staleAfter = activeUserId.current ? WARDROBE_LOAD_TIMEOUT_MS : AUTH_CHECK_TIMEOUT_MS
+      const staleLoading = currentBusy && now - (busyStartedAtRef.current ?? now) >= staleAfter
+      const staleData = activeUserId.current && now - lastWardrobeRefreshRef.current > 5 * 60 * 1000
+      if (currentBusy && !staleLoading) return
+      if (!currentBusy && !activeUserId.current) return
+      if (!staleLoading && !staleData) return
+      lastVisibilityCheckRef.current = now
+      checking = true
+      try {
+        if (!activeUserId.current) {
+          const { data, error } = await withTimeout(
+            supabase.auth.getSession(),
+            AUTH_CHECK_TIMEOUT_MS,
+            'Could not restore your sign-in session after returning. Retry to continue.',
+          )
+          if (error) throw error
+          if (!active) return
+          if (data.session) {
+            applySession(data.session)
+          } else {
+            setLoadingError('')
+            updateBusy(false)
+          }
+          return
+        }
+
+        if (staleLoading) {
+          refreshAttemptRef.current += 1
+          refreshInFlightRef.current = null
+        }
+        setLoadingError('')
+        updateBusy(true)
+        try {
+          await refresh()
+        } catch (refreshError) {
+          if (active) setLoadingError(refreshError.message || 'Could not refresh your wardrobe.')
+        } finally {
+          if (active) updateBusy(false)
+        }
+      } catch (error) {
+        if (active) {
+          setLoadingError(error.message || 'Could not recover your session after returning.')
+          updateBusy(false)
+        }
+      } finally {
+        checking = false
+      }
+    }
+    document.addEventListener('visibilitychange', recoverWhenVisible)
+    window.addEventListener('focus', recoverWhenVisible)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', recoverWhenVisible)
+      window.removeEventListener('focus', recoverWhenVisible)
+    }
+  }, [applySession, refresh, updateBusy])
 
   async function removeClothing(item) {
     if (!window.confirm('Remove this clothing piece?')) return
@@ -346,13 +663,100 @@ export default function WardrobeApp() {
     if (error) setNotice(error.message)
   }
 
+  async function retryLoading() {
+    setLoadingError('')
+    updateBusy(true)
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.getSession(),
+        AUTH_CHECK_TIMEOUT_MS,
+        'Checking your sign-in session took too long. Retry to continue.',
+      )
+      if (error) throw error
+      const sameUser = (data.session?.user.id ?? null) === activeUserId.current
+      applySession(data.session)
+      if (!data.session) {
+        updateBusy(false)
+        return
+      }
+      if (sameUser) await refresh()
+    } catch (error) {
+      setLoadingError(error.message || 'Could not recover your session. Please retry.')
+      updateBusy(false)
+    }
+  }
+
+  async function retryWardrobe() {
+    setLoadingError('')
+    updateBusy(true)
+    try {
+      await refresh()
+    } catch (error) {
+      setLoadingError(error.message || 'Could not load your wardrobe.')
+    } finally {
+      updateBusy(false)
+    }
+  }
+
   if (!supabaseConfigured) return <main className="legal-page"><div className="eyebrow">THE FOLD / SETUP</div><h1>Supabase is not configured.</h1><p className="legal-intro">Create a local <code>.env.local</code> from the provided example and set the Supabase project URL and publishable key. Follow <code>SUPABASE_SETUP.md</code> to create the database tables, private image bucket and access policies.</p></main>
   if (busy) return <div className="loading-screen"><Mark /><span>Opening your wardrobe…</span></div>
-  if (page === 'profile' && user && !profile) return <main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main>
-  if (page === 'profile' && user) return <ProfilePage profile={profile} email={user.email} onBack={() => setPage('app')} onSaved={setProfile} />
+  if (loadingError && !session) return <main className="loading-recovery"><Mark /><h1>We couldn’t open your wardrobe.</h1><p>{loadingError}</p><button className="button button-primary" onClick={retryLoading}>Retry</button></main>
+  const profileSection = ['profile', 'security', 'account'].includes(page) ? page : ''
+  const navigateProfileSection = (section) => setPage(section)
+  const profileNav = (next) => next === 'profile' || next === 'security' || next === 'account' ? navigateProfileSection(next) : setPage(next)
+  if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main></div>
+  if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
+  if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy') return <LegalPage privacy onBack={() => setPage(user ? 'app' : 'auth')} />
   if (!session) return <Auth onSignedIn={applySession} />
 
-  const visible = filter === 'All pieces' ? clothes : clothes.filter((item) => item.category === filter)
+  if (view !== 'legacy') {
+    const visible = clothes.filter((item) => (filter === 'All' || item.category === filter) &&
+      `${item.category} ${item.subcategory || ''} ${item.color || ''} ${item.season || ''} ${item.notes || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+    const navigate = (nextView) => {
+      if (nextView === 'profile') setPage('profile')
+      else { setPage('app'); setView(nextView) }
+    }
+    const displayName = profile?.full_name || user.email
+    return <div className={`app-shell theme-${theme}`}>
+      <header className="topbar">
+        <button className="wordmark" onClick={() => navigate('home')} aria-label="The Fold home"><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></button>
+        <nav className="top-nav" aria-label="Main navigation">
+          <button className={view === 'home' ? 'nav-active' : ''} onClick={() => navigate('home')}>Home</button>
+          <button className={view === 'wardrobe' ? 'nav-active' : ''} onClick={() => navigate('wardrobe')}>Wardrobe <span>{clothes.length}</span></button>
+          <button className={view === 'outfits' ? 'nav-active' : ''} onClick={() => navigate('outfits')}>Outfits <span>{outfits.length}</span></button>
+        </nav>
+        <div className="account-menu"><button className="account-trigger" onClick={() => navigate('profile')} aria-label="Open profile"><span className="user-avatar">{displayName?.slice(0, 1).toUpperCase()}</span><span className="user-email">{displayName}</span></button><ThemeToggle theme={theme} onChange={setTheme} /></div>
+      </header>
+      <main className="workspace">
+        {loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}
+        {notice && <div className="notice" role="status">{notice}<button className="text-button" onClick={() => setNotice('')}>Dismiss</button></div>}
+        {view === 'home' && <section className="home-view">
+          <div className="home-welcome"><div><span className="eyebrow">A LITTLE MORE ROOM TO GET DRESSED</span><h1>Good to see you{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.</h1><p>Your wardrobe, thoughtfully gathered in one place.</p></div><button className="button button-primary" onClick={() => setModal('add')}><Icon name="add" /> Add a piece</button></div>
+          <div className="home-stat-grid"><button className="home-stat" onClick={() => navigate('wardrobe')}><span>IN YOUR WARDROBE</span><strong>{clothes.length}</strong><small>pieces to wear and love <Icon name="arrow" /></small></button><button className="home-stat" onClick={() => navigate('outfits')}><span>LOOKS SAVED</span><strong>{outfits.length}</strong><small>outfits of your own <Icon name="arrow" /></small></button></div>
+          <section className="home-section"><div className="section-heading"><div><span className="eyebrow">RECENT ADDITIONS</span><h2>In your wardrobe</h2></div><button className="text-button" onClick={() => navigate('wardrobe')}>See all <Icon name="arrow" /></button></div>
+            {clothes.length ? <div className="clothing-grid home-clothing-grid">{clothes.slice(0, 4).map((item) => <ClothingCard key={item.id} item={item} onDelete={removeClothing} onOpen={setSelectedItem} onDragStart={(event, piece) => event.dataTransfer.setData('text/plain', String(piece.id))} />)}</div> : <EmptyState title="Your wardrobe starts here." description="Add a photo and the details you care about. Your pieces stay private." action="Add your first piece" onAction={() => setModal('add')} />}
+          </section>
+        </section>}
+        {view === 'wardrobe' && <section className="wardrobe-view">
+          <div className="page-heading"><div><span className="eyebrow">A CLEARER VIEW OF WHAT YOU OWN</span><h1>Your wardrobe <span className="heading-count">{clothes.length}</span></h1><p>Every piece, in its place.</p></div><div className="heading-actions"><button className="button button-outline" onClick={() => setModal('outfit')} disabled={!clothes.length}>Build an outfit</button><button className="button button-primary" onClick={() => setModal('add')}><Icon name="add" /> Add a piece</button></div></div>
+          <CategoryFilters active={filter} onSelect={setFilter} count={clothes.length} />
+          <label className="search-box"><Icon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your pieces" aria-label="Search clothing" />{search && <button className="text-button" type="button" onClick={() => setSearch('')}>Clear</button>}</label>
+          {visible.length ? <div className="clothing-grid">{visible.map((item) => <ClothingCard key={item.id} item={item} onDelete={removeClothing} onOpen={setSelectedItem} onDragStart={(event, piece) => event.dataTransfer.setData('text/plain', String(piece.id))} />)}</div> : <EmptyState title={search ? 'No pieces match that search.' : filter === 'All' ? 'Your wardrobe starts here.' : `No ${filter.toLowerCase()} yet.`} description={search ? 'Try another color, category, or detail.' : 'Add a photo and the details you care about. Your pieces stay private.'} action={!search ? 'Add your first piece' : undefined} onAction={() => setModal('add')} />}
+        </section>}
+        {view === 'outfits' && <section className="outfits-view"><div className="page-heading"><div><span className="eyebrow">MADE FROM WHAT YOU HAVE</span><h1>Saved outfits <span className="heading-count">{outfits.length}</span></h1><p>Looks worth coming back to.</p></div><button className="button button-primary" disabled={!clothes.length} onClick={() => setModal('outfit')}>Build an outfit</button></div>
+          {outfits.length ? <div className="saved-outfit-grid">{outfits.map((outfit) => <button className="saved-outfit" key={outfit.id} onClick={() => setSelectedOutfit(outfit)}><div className="saved-outfit-images">{outfit.items.slice(0, 3).map((item) => <img key={item.id} src={item.image_url} alt="" />)}</div><div className="saved-outfit-caption"><strong>{outfit.name}</strong><span>{outfit.items.length} {outfit.items.length === 1 ? 'piece' : 'pieces'} <Icon name="arrow" /></span></div></button>)}</div> : <EmptyState title="No outfits saved yet." description="Combine pieces from your wardrobe and save a look to return to." action={clothes.length ? 'Build an outfit' : 'Add a piece first'} onAction={() => clothes.length ? setModal('outfit') : setModal('add')} />}
+        </section>}
+      </main>
+      <footer className="workspace-footer"><span>YOUR PHOTOS ARE PRIVATE · NO AI · NO ADS</span><button className="text-button" onClick={() => setPage('privacy')}>Privacy &amp; data</button></footer>
+      <BottomNav view={view} page={page} onNavigate={navigate} onAdd={() => setModal('add')} />
+      {modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setFilter('All'); setView('wardrobe') }} />}
+      {modal === 'outfit' && <OutfitBuilder clothes={clothes} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setView('outfits') }} />}
+      {selectedItem && <ClothingDetails item={selectedItem} onClose={() => setSelectedItem(null)} onDelete={removeClothing} />}
+      {selectedOutfit && <OutfitDetails outfit={selectedOutfit} onClose={() => setSelectedOutfit(null)} />}
+    </div>
+  }
+
+  const visible = filter === 'All' ? clothes : clothes.filter((item) => item.category === filter)
   return <div className="app-shell"><header className="topbar"><button className="wordmark" onClick={() => { setPage('app'); setView('wardrobe') }}><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></button><nav className="top-nav"><button className={view === 'wardrobe' ? 'nav-active' : ''} onClick={() => setView('wardrobe')}>Wardrobe <span>{clothes.length}</span></button><button className={view === 'outfits' ? 'nav-active' : ''} onClick={() => setView('outfits')}>Outfits <span>{outfits.length}</span></button></nav><div className="account-menu"><span className="user-avatar">{(profile?.full_name || user.email)?.slice(0, 1).toUpperCase()}</span><span className="user-email">{profile?.full_name || user.email}</span><details><summary aria-label="Account menu">···</summary><div className="account-dropdown"><button onClick={() => setPage('profile')}>Your profile</button><button onClick={exportData}>Export my data</button><button onClick={() => setPage('privacy')}>Privacy notice</button><button onClick={logout}>Sign out</button><button className="danger-action" onClick={deleteAccount}>Delete account</button></div></details></div></header><main className="workspace"><div className="page-heading"><div><div className="eyebrow">{view === 'wardrobe' ? 'A CLEARER VIEW OF WHAT YOU OWN' : 'MADE FROM WHAT YOU HAVE'}</div><h1>{view === 'wardrobe' ? 'Your wardrobe' : 'Saved outfits'}<span className="heading-count">{view === 'wardrobe' ? clothes.length : outfits.length}</span></h1><p>{view === 'wardrobe' ? 'Every piece, in its place.' : 'Looks worth coming back to.'}</p></div><div className="heading-actions">{view === 'wardrobe' && <button className="button button-outline" onClick={() => setModal('outfit')} disabled={!clothes.length}>＋ Build an outfit</button>}<button className="button button-primary" onClick={() => setModal('add')}>＋ Add a piece</button></div></div>{notice && <div className="notice" role="status">{notice}<button className="text-button" onClick={() => setNotice('')}>Dismiss</button></div>}{view === 'wardrobe' ? <><div className="filter-row" role="group" aria-label="Filter by category">{categories.map((category) => <button key={category} className={`filter-chip${filter === category ? ' selected' : ''}`} onClick={() => setFilter(category)}>{category}{category === 'All pieces' && <span>{clothes.length}</span>}</button>)}</div>{visible.length ? <div className="clothing-grid">{visible.map((item) => <ClothingCard key={item.id} item={item} onDelete={removeClothing} onDragStart={(event, piece) => event.dataTransfer.setData('text/plain', String(piece.id))} />)}</div> : <section className="empty-state"><div className="empty-art"><div className="empty-hanger" /><div className="empty-shirt" /><div className="empty-trouser" /></div><div className="eyebrow">A LITTLE SPACE TO START</div><h2>{filter === 'All pieces' ? 'Your wardrobe starts here.' : `No ${filter.toLowerCase()} yet.`}</h2><p>Add a photo and the details you care about. Your pieces stay private.</p><button className="button button-primary" onClick={() => setModal('add')}>＋ Add your first piece</button></section>}</> : <section className="outfits-view">{outfits.length ? <div className="saved-outfit-grid">{outfits.map((outfit) => <article className="saved-outfit" key={outfit.id}><div className="saved-outfit-images">{outfit.items.slice(0, 3).map((item) => <img key={item.id} src={item.image_url} alt="" />)}</div><div className="saved-outfit-caption"><strong>{outfit.name}</strong><span>{outfit.items.length} {outfit.items.length === 1 ? 'piece' : 'pieces'}</span></div></article>)}</div> : <section className="empty-state"><div className="eyebrow">A LOOK OF YOUR OWN</div><h2>No outfits saved yet.</h2><p>Drag pieces from your wardrobe onto a canvas and save a combination.</p><button className="button button-primary" onClick={() => setView('wardrobe')}>View wardrobe</button></section>}</section>}</main><footer className="workspace-footer"><span>YOUR PHOTOS ARE PRIVATE · NO AI · NO ADS</span><button className="text-button" onClick={() => setPage('privacy')}>Privacy &amp; data</button></footer>{modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setFilter('All pieces') }} />}{modal === 'outfit' && <OutfitBuilder clothes={clothes} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setView('outfits') }} />}</div>
 }
