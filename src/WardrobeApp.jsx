@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, supabaseConfigured } from './supabase'
 import './wardrobe.css'
 
-const API = import.meta.env.VITE_API_URL || 'https://checkpluse.onrender.com/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'wardrobe-images'
 const TERMS_VERSION = '1.0'
 const PRIVACY_VERSION = '1.0'
