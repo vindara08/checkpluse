@@ -2511,6 +2511,286 @@ textarea:focus-visible {
     }
 }
 
+.secondary-menu {
+    position: relative;
+    display: none;
+}
+
+.secondary-menu-toggle {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: var(--ink);
+    background: var(--paper);
+    cursor: pointer;
+}
+
+.secondary-menu-panel {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 9px);
+    right: 0;
+    width: min(240px, calc(100vw - 28px));
+    display: grid;
+    gap: 3px;
+    padding: 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    box-shadow: 0 14px 36px #17251d24;
+}
+
+.secondary-menu-panel button {
+    min-height: 43px;
+    border: 0;
+    border-radius: 5px;
+    padding: 0 12px;
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+}
+
+.secondary-menu-panel button:hover {
+    background: var(--canvas);
+}
+
+.secondary-menu-panel .secondary-menu-danger {
+    color: #a13d32;
+}
+
+.theme-dark .secondary-menu-panel .secondary-menu-danger {
+    color: #ef9687;
+}
+
+.profile-summary,
+.profile-options,
+.profile-tool-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+}
+
+.profile-summary {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 18px;
+    padding: 17px;
+}
+
+.profile-avatar {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--green);
+    font: 18px var(--mono);
+}
+
+.profile-summary > div,
+.profile-action > span {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+}
+
+.profile-summary strong,
+.profile-action strong {
+    color: var(--ink);
+    font-size: 14px;
+}
+
+.profile-summary > div > span,
+.profile-action small {
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.profile-options {
+    display: grid;
+    gap: 0;
+    padding: 18px;
+}
+
+.profile-section-title {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 12px;
+}
+
+.profile-section-title strong {
+    color: var(--ink);
+    font-size: 14px;
+}
+
+.profile-section-title span {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.profile-options .profile-action {
+    width: 100%;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    padding: 12px 2px;
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.profile-options .profile-action .ui-icon {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    color: var(--muted);
+}
+
+.profile-options .profile-action.profile-danger strong,
+.profile-options .profile-action.profile-danger .ui-icon {
+    color: #a13d32;
+}
+
+.theme-dark .profile-options .profile-action.profile-danger strong,
+.theme-dark .profile-options .profile-action.profile-danger .ui-icon {
+    color: #ef9687;
+}
+
+.profile-tool-card {
+    display: grid;
+    gap: 12px;
+    padding: 20px;
+}
+
+.profile-tool-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.mobile-section-header {
+    display: none;
+}
+
+@media (max-width: 760px) {
+    .app-shell {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        min-height: 0;
+        overflow: clip;
+    }
+
+    .topbar {
+        flex: 0 0 64px;
+    }
+
+    .account-menu {
+        gap: 7px;
+    }
+
+    .account-menu .secondary-menu {
+        display: block;
+    }
+
+    .secondary-menu-toggle {
+        width: 36px;
+        height: 36px;
+    }
+
+    .workspace {
+        width: min(100% - 36px, 620px);
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        padding: 26px 0 calc(88px + env(safe-area-inset-bottom));
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .workspace::-webkit-scrollbar,
+    .profile-page::-webkit-scrollbar,
+    .legal-page::-webkit-scrollbar {
+        display: none;
+    }
+
+    .workspace-footer {
+        display: none;
+    }
+
+    .mobile-section-header {
+        position: relative;
+        z-index: 8;
+        flex: 0 0 64px;
+        min-height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper);
+    }
+
+    .profile-page,
+    .legal-page.profile-document {
+        width: min(100% - 36px, 560px);
+        min-width: 0;
+        min-height: 0;
+        height: auto;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        padding: 24px 0 calc(92px + env(safe-area-inset-bottom));
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .profile-page h1 {
+        font-size: clamp(32px, 8vw, 40px);
+    }
+
+    .profile-page .back-link {
+        margin-bottom: 24px;
+    }
+
+    .profile-options,
+    .profile-form,
+    .profile-tool-card {
+        padding: 15px;
+    }
+
+    .profile-options .profile-action {
+        min-height: 68px;
+        padding-block: 12px;
+    }
+
+    .bottom-nav {
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
+}
+
 .profile-section-nav {
     display: flex;
     gap: 6px;

@@ -53,6 +53,7 @@ function Icon({ name }) {
     profile: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6" /></>,
     search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
     arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
+    menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
   }
   return <svg className="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.wardrobe}</svg>
 }
@@ -84,7 +85,7 @@ async function loadClothing(userId) {
 async function loadOutfits(userId) {
   const { data: outfits, error } = await supabase.from('outfits').select('*').eq('user_id', userId).order('created_at', { ascending: false })
   if (error) throw error
-  return Promise.all(outfits.map(async (outfit) => {
+  const hydratedOutfits = await Promise.all(outfits.map(async (outfit) => {
     const { data: links, error: linksError } = await supabase
       .from('outfit_items')
       .select('position, clothing_items(*)')
@@ -92,12 +93,20 @@ async function loadOutfits(userId) {
       .order('position')
     if (linksError) throw linksError
     const items = await Promise.all(links.map(async ({ clothing_items: item }) => {
+      if (!item) return null
       const { data: signed, error: signedError } = await supabase.storage.from(BUCKET).createSignedUrl(item.image_path, 3600)
       if (signedError) throw signedError
       return { ...item, image_url: signed.signedUrl }
     }))
-    return { ...outfit, items }
+    return { ...outfit, items: items.filter(Boolean) }
   }))
+  const validOutfits = hydratedOutfits.filter((outfit) => outfit.items.length > 0)
+  const emptyOutfitIds = hydratedOutfits.filter((outfit) => outfit.items.length === 0).map((outfit) => outfit.id)
+  if (emptyOutfitIds.length) {
+    const { error: cleanupError } = await supabase.from('outfits').delete().eq('user_id', userId).in('id', emptyOutfitIds)
+    if (cleanupError) throw cleanupError
+  }
+  return validOutfits
 }
 
 async function compressPhoto(file, session) {
@@ -217,10 +226,10 @@ function ProfilePage({ profile, email, theme, onThemeChange, section = 'profile'
       <section className="profile-summary"><span className="profile-avatar">{(name || email || '?').slice(0, 1).toUpperCase()}</span><div><strong>{name || 'Your name'}</strong><span>{email}</span></div></section>
       <section className="profile-options profile-account-actions">
         <div className="profile-section-title"><strong>Data and account actions</strong><span>Download a copy of your data or close your account.</span></div>
-        <button type="button" onClick={onExport}>Download your data <Icon name="arrow" /></button>
-        <button type="button" onClick={onPrivacy}>Privacy notice <Icon name="arrow" /></button>
-        <button type="button" onClick={onLogout}>Sign out <Icon name="arrow" /></button>
-        <button className="profile-danger" type="button" onClick={onDelete}>Delete account <Icon name="arrow" /></button>
+        <button className="profile-action" type="button" onClick={onExport}><span><strong>Download your data</strong><small>Save a copy of your wardrobe and account details.</small></span><Icon name="arrow" /></button>
+        <button className="profile-action" type="button" onClick={onPrivacy}><span><strong>Privacy notice</strong><small>Review how your information is used and stored.</small></span><Icon name="arrow" /></button>
+        <button className="profile-action" type="button" onClick={onLogout}><span><strong>Sign out</strong><small>End this session on this device.</small></span><Icon name="arrow" /></button>
+        <button className="profile-action profile-danger" type="button" onClick={onDelete}><span><strong>Delete account</strong><small>Permanently remove your account and associated data.</small></span><Icon name="arrow" /></button>
       </section>
     </>}
   </main>
@@ -281,15 +290,31 @@ function BottomNav({ view, page, onNavigate, onAdd }) {
   const navItems = [
     ['home', 'Home', () => { onNavigate('home') }],
     ['wardrobe', 'Wardrobe', () => { onNavigate('wardrobe') }],
-    ['add', 'Add', onAdd],
     ['outfits', 'Outfits', () => { onNavigate('outfits') }],
+    ['add', 'Add', onAdd],
     ['profile', 'Profile', () => { onNavigate('profile') }],
   ]
   return <nav className="bottom-nav" aria-label="Main navigation">
-    {navItems.map(([icon, label, action]) => <button key={label} className={`${icon === 'add' ? 'bottom-add' : ''}${(icon === 'profile' ? page === 'profile' : view === icon) ? ' active' : ''}`} aria-current={(icon === 'profile' ? page === 'profile' : view === icon) ? 'page' : undefined} onClick={action}>
-      <Icon name={icon} /><span>{label}</span>
-    </button>)}
+    {navItems.map(([icon, label, action]) => {
+      const active = icon === 'profile' ? ['profile', 'security', 'account', 'privacy'].includes(page) : view === icon
+      return <button key={label} className={`${icon === 'add' ? 'bottom-add' : ''}${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined} onClick={action}>
+        <Icon name={icon} /><span>{label}</span>
+      </button>
+    })}
   </nav>
+}
+
+function SecondaryMenu({ open, onToggle, onNavigate, onExport, onLogout }) {
+  return <div className="secondary-menu">
+    <button className="secondary-menu-toggle" type="button" aria-label="Open account menu" aria-expanded={open} onClick={onToggle}><Icon name="menu" /></button>
+    {open && <nav className="secondary-menu-panel" aria-label="Account and settings">
+      <button type="button" onClick={() => onNavigate('account')}>Account</button>
+      <button type="button" onClick={() => onNavigate('security')}>Security</button>
+      <button type="button" onClick={() => onNavigate('privacy')}>Privacy</button>
+      <button type="button" onClick={onExport}>Download your data</button>
+      <button className="secondary-menu-danger" type="button" onClick={onLogout}>Sign out</button>
+    </nav>}
+  </div>
 }
 
 function AddClothing({ session, userId, onClose, onSaved }) {
@@ -442,6 +467,7 @@ export default function WardrobeApp() {
   const [selectedOutfit, setSelectedOutfit] = useState(null)
   const [theme, setTheme] = useState(() => window.localStorage.getItem('the-fold-theme') === 'dark' ? 'dark' : 'light')
   const [modal, setModal] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [busy, setBusy] = useState(supabaseConfigured)
   const [notice, setNotice] = useState('')
   const [loadingError, setLoadingError] = useState('')
@@ -611,6 +637,20 @@ export default function WardrobeApp() {
   async function removeClothing(item) {
     if (!window.confirm('Remove this clothing piece?')) return
     try {
+      const { data: outfitLinks, error: linksError } = await supabase
+        .from('outfit_items')
+        .select('outfit_id')
+        .eq('clothing_id', item.id)
+      if (linksError) throw linksError
+      const affectedOutfitIds = [...new Set(outfitLinks.map((link) => link.outfit_id))]
+      if (affectedOutfitIds.length) {
+        const { error: outfitsError } = await supabase
+          .from('outfits')
+          .delete()
+          .eq('user_id', userId)
+          .in('id', affectedOutfitIds)
+        if (outfitsError) throw outfitsError
+      }
       const { error: deleteError } = await supabase.from('clothing_items').delete().eq('id', item.id).eq('user_id', userId)
       if (deleteError) throw deleteError
       const { error: storageError } = await supabase.storage.from(BUCKET).remove([item.image_path])
@@ -704,9 +744,17 @@ export default function WardrobeApp() {
   const profileSection = ['profile', 'security', 'account'].includes(page) ? page : ''
   const navigateProfileSection = (section) => setPage(section)
   const profileNav = (next) => next === 'profile' || next === 'security' || next === 'account' ? navigateProfileSection(next) : setPage(next)
-  if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main></div>
-  if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
-  if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
+  const closeAccountMenu = () => setMenuOpen(false)
+  const navigateAccountMenu = (section) => { closeAccountMenu(); setPage(section) }
+  const exportFromMenu = () => { closeAccountMenu(); exportData() }
+  const logoutFromMenu = () => { closeAccountMenu(); logout() }
+  const mobileSectionHeader = <header className="mobile-section-header">
+    <button className="wordmark" onClick={() => { setPage('app'); setView('home') }} aria-label="The Fold home"><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></button>
+    <SecondaryMenu open={menuOpen} onToggle={() => setMenuOpen((current) => !current)} onNavigate={navigateAccountMenu} onExport={exportFromMenu} onLogout={logoutFromMenu} />
+  </header>
+  if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
+  if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
+  if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy') return <LegalPage privacy onBack={() => setPage(user ? 'app' : 'auth')} />
   if (!session) return <Auth onSignedIn={applySession} />
 
@@ -726,7 +774,7 @@ export default function WardrobeApp() {
           <button className={view === 'wardrobe' ? 'nav-active' : ''} onClick={() => navigate('wardrobe')}>Wardrobe <span>{clothes.length}</span></button>
           <button className={view === 'outfits' ? 'nav-active' : ''} onClick={() => navigate('outfits')}>Outfits <span>{outfits.length}</span></button>
         </nav>
-        <div className="account-menu"><button className="account-trigger" onClick={() => navigate('profile')} aria-label="Open profile"><span className="user-avatar">{displayName?.slice(0, 1).toUpperCase()}</span><span className="user-email">{displayName}</span></button><ThemeToggle theme={theme} onChange={setTheme} /></div>
+        <div className="account-menu"><button className="account-trigger" onClick={() => navigate('profile')} aria-label="Open profile"><span className="user-avatar">{displayName?.slice(0, 1).toUpperCase()}</span><span className="user-email">{displayName}</span></button><ThemeToggle theme={theme} onChange={setTheme} /><SecondaryMenu open={menuOpen} onToggle={() => setMenuOpen((current) => !current)} onNavigate={navigateAccountMenu} onExport={exportFromMenu} onLogout={logoutFromMenu} /></div>
       </header>
       <main className="workspace">
         {loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}
