@@ -337,25 +337,64 @@ function EmptyState({ title, description, action, onAction }) {
   </section>
 }
 
-function ClothingDetails({ item, onClose, onDelete }) {
+function ClothingEditor({ item, onClose, onSaved }) {
+  const [category, setCategory] = useState(item.category)
+  const [color, setColor] = useState(item.color || '')
+  const [subcategory, setSubcategory] = useState(item.subcategory || '')
+  const [season, setSeason] = useState(item.season || '')
+  const [notes, setNotes] = useState(item.notes || '')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function save(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const changes = { category, color: color.trim(), subcategory: subcategory.trim(), season, notes: notes.trim() }
+    try {
+      const { data, error: updateError } = await supabase.from('clothing_items').update(changes).eq('id', item.id).eq('user_id', item.user_id).select().single()
+      if (updateError) throw updateError
+      await onSaved({ ...item, ...data })
+    } catch (err) {
+      setError(err.message || 'Could not update this clothing item.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-clothing-title">
+      <div className="modal-heading"><div><span className="eyebrow">EDIT YOUR PIECE</span><h2 id="edit-clothing-title">Update details</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
+      <form className="form-grid" onSubmit={save}>
+        <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Type<input value={subcategory} onChange={(event) => setSubcategory(event.target.value)} maxLength={60} /></label>
+        <label>Color<input value={color} onChange={(event) => setColor(event.target.value)} maxLength={40} /></label>
+        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option></select></label>
+        <label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={4} /></label>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="modal-actions wide-field"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
+      </form>
+    </section>
+  </div>
+}
+
+function ClothingDetails({ item, onClose, onDelete, onEdit }) {
   return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-panel detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <button className="icon-button close-button detail-close" aria-label="Close item details" onClick={onClose}>×</button>
       <img className="detail-photo" src={item.image_url} alt={`${item.subcategory || item.category}${item.color ? `, ${item.color}` : ''}`} />
       <div className="detail-copy"><span className="eyebrow">{item.category}</span><h2 id="detail-title">{item.subcategory || item.category}</h2>
         <dl>{item.color && <div><dt>Color</dt><dd>{item.color}</dd></div>}{item.season && <div><dt>Season</dt><dd>{item.season}</dd></div>}{item.notes && <div><dt>Notes</dt><dd>{item.notes}</dd></div>}</dl>
-        <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-danger" onClick={() => { onClose(); onDelete(item) }}>Remove item</button></div>
+        <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-outline" onClick={() => onEdit(item)}>Edit</button><button className="button button-danger" onClick={() => { onClose(); onDelete(item) }}>Remove item</button></div>
       </div>
     </section>
   </div>
 }
 
-function OutfitDetails({ outfit, onClose }) {
+function OutfitDetails({ outfit, onClose, onEdit }) {
   return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-panel outfit-detail-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-detail-title">
       <div className="modal-heading"><div><span className="eyebrow">YOUR COMBINATION</span><h2 id="outfit-detail-title">{outfit.name}</h2></div><button className="icon-button close-button" aria-label="Close outfit details" onClick={onClose}>×</button></div>
       <div className="outfit-detail-grid">{outfit.items.map((item) => <figure key={item.id}><img src={item.image_url} alt={item.subcategory || item.category} /><figcaption>{item.subcategory || item.category}</figcaption></figure>)}</div>
-      <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button></div>
+      <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-primary" onClick={() => onEdit(outfit)}>Edit</button></div>
     </section>
   </div>
 }
@@ -364,8 +403,8 @@ function BottomNav({ view, page, onNavigate, onAdd }) {
   const navItems = [
     ['home', 'Home', () => { onNavigate('home') }],
     ['wardrobe', 'Wardrobe', () => { onNavigate('wardrobe') }],
-    ['outfits', 'Outfits', () => { onNavigate('outfits') }],
     ['add', 'Add', onAdd],
+    ['outfits', 'Outfits', () => { onNavigate('outfits') }],
     ['profile', 'Profile', () => { onNavigate('profile') }],
   ]
   return <nav className="bottom-nav" aria-label="Main navigation">
@@ -500,9 +539,9 @@ function AddClothing({ session, userId, onClose, onSaved }) {
   </section></div>
 }
 
-function OutfitBuilder({ clothes, userId, onClose, onSaved }) {
-  const [selected, setSelected] = useState([])
-  const [name, setName] = useState('Everyday outfit')
+function OutfitBuilder({ clothes, userId, outfit, onClose, onSaved }) {
+  const [selected, setSelected] = useState(() => outfit ? outfit.items : [])
+  const [name, setName] = useState(() => outfit?.name || 'Everyday outfit')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   function addItem(id) {
@@ -514,13 +553,22 @@ function OutfitBuilder({ clothes, userId, onClose, onSaved }) {
     setBusy(true)
     setError('')
     try {
-      const { data: outfit, error: outfitError } = await supabase.from('outfits').insert({ user_id: userId, name: name.trim() }).select().single()
-      if (outfitError) throw outfitError
-      const { error: itemsError } = await supabase.from('outfit_items').insert(selected.map((item, position) => ({ outfit_id: outfit.id, clothing_id: item.id, position })))
-      if (itemsError) {
-        const { error: cleanupError } = await supabase.from('outfits').delete().eq('id', outfit.id)
-        if (cleanupError) throw new Error(`Outfit items could not be saved and cleanup failed: ${cleanupError.message}`)
-        throw itemsError
+      if (!name.trim() || !selected.length) throw new Error('Add a name and at least one piece to save this outfit.')
+      if (outfit) {
+        const { error: outfitError } = await supabase.from('outfits').update({ name: name.trim() }).eq('id', outfit.id).eq('user_id', userId)
+        if (outfitError) throw outfitError
+        const { error: deleteLinksError } = await supabase.from('outfit_items').delete().eq('outfit_id', outfit.id)
+        if (deleteLinksError) throw deleteLinksError
+        const { error: itemsError } = await supabase.from('outfit_items').insert(selected.map((item, position) => ({ outfit_id: outfit.id, clothing_id: item.id, position })))
+        if (itemsError) throw itemsError
+      } else {
+        const { data: createdOutfit, error: outfitError } = await supabase.from('outfits').insert({ user_id: userId, name: name.trim() }).select().single()
+        if (outfitError) throw outfitError
+        const { error: itemsError } = await supabase.from('outfit_items').insert(selected.map((item, position) => ({ outfit_id: createdOutfit.id, clothing_id: item.id, position })))
+        if (itemsError) {
+          await supabase.from('outfits').delete().eq('id', createdOutfit.id).eq('user_id', userId)
+          throw itemsError
+        }
       }
       await onSaved()
     } catch (err) { setError(err.message || 'Could not save the outfit.') } finally { setBusy(false) }
@@ -538,6 +586,7 @@ export default function WardrobeApp() {
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
+  const [editingItem, setEditingItem] = useState(null)
   const [selectedOutfit, setSelectedOutfit] = useState(null)
   const [theme, setTheme] = useState(() => window.localStorage.getItem('the-fold-theme') === 'dark' ? 'dark' : 'light')
   const [modal, setModal] = useState('')
@@ -728,14 +777,18 @@ export default function WardrobeApp() {
   }, [applySession, refresh, updateBusy])
 
   async function removeClothing(item) {
-    if (!window.confirm('Remove this clothing piece?')) return
     try {
       const { data: outfitLinks, error: linksError } = await supabase
         .from('outfit_items')
-        .select('outfit_id')
+        .select('outfit_id, outfits(name)')
         .eq('clothing_id', item.id)
       if (linksError) throw linksError
       const affectedOutfitIds = [...new Set(outfitLinks.map((link) => link.outfit_id))]
+      const affectedNames = outfitLinks.map((link) => link.outfits?.name).filter(Boolean)
+      const warning = affectedNames.length
+        ? `This item is currently used in ${affectedNames.length === 1 ? `the outfit “${affectedNames[0]}”` : `${affectedNames.length} outfits (${affectedNames.join(', ')})`}. Deleting it will also remove ${affectedNames.length === 1 ? 'that outfit' : 'those outfits'}. Continue?`
+        : 'Are you sure you want to delete this item?'
+      if (!window.confirm(warning)) return
       if (affectedOutfitIds.length) {
         const { error: outfitsError } = await supabase
           .from('outfits')
@@ -743,11 +796,11 @@ export default function WardrobeApp() {
           .eq('user_id', userId)
           .in('id', affectedOutfitIds)
         if (outfitsError) throw outfitsError
-      }
-      const { error: deleteError } = await supabase.from('clothing_items').delete().eq('id', item.id).eq('user_id', userId)
-      if (deleteError) throw deleteError
-      const { error: storageError } = await supabase.storage.from(BUCKET).remove([item.image_path])
-      await refresh()
+        }
+        const { error: deleteError } = await supabase.from('clothing_items').delete().eq('id', item.id).eq('user_id', userId)
+        if (deleteError) throw deleteError
+        const { error: storageError } = await supabase.storage.from(BUCKET).remove([item.image_path])
+        await refresh()
       if (storageError) throw new Error(`Clothing item removed, but its stored photo could not be deleted: ${storageError.message}`)
     } catch (error) { setNotice(error.message) }
   }
@@ -905,10 +958,13 @@ export default function WardrobeApp() {
       <BottomNav view={view} page={page} onNavigate={navigate} onAdd={() => setModal('add')} />
       {modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setFilter('All'); setView('wardrobe') }} />}
       {modal === 'outfit' && <OutfitBuilder clothes={clothes} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setView('outfits') }} />}
-      {selectedItem && <ClothingDetails item={selectedItem} onClose={() => setSelectedItem(null)} onDelete={removeClothing} />}
-      {selectedOutfit && <OutfitDetails outfit={selectedOutfit} onClose={() => setSelectedOutfit(null)} />}
+      {modal === 'edit-outfit' && selectedOutfit && <OutfitBuilder clothes={clothes} userId={userId} outfit={selectedOutfit} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setSelectedOutfit(null); setView('outfits') }} />}
+      {selectedItem && <ClothingDetails item={selectedItem} onClose={() => setSelectedItem(null)} onDelete={removeClothing} onEdit={(item) => { setSelectedItem(null); setEditingItem(item) }} />}
+      {editingItem && <ClothingEditor item={editingItem} onClose={() => setEditingItem(null)} onSaved={async (item) => { setClothes((current) => current.map((piece) => piece.id === item.id ? { ...piece, ...item } : piece)); setEditingItem(null); await refresh() }} />}
+      {selectedOutfit && !modal && <OutfitDetails outfit={selectedOutfit} onClose={() => setSelectedOutfit(null)} onEdit={() => setModal('edit-outfit')} />}
     </div>
   }
 
   const visible = filter === 'All' ? clothes : clothes.filter((item) => item.category === filter)
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel outfit-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-title"><div className="modal-heading"><div><div className="eyebrow">OUTFIT BUILDER</div><h2 id="outfit-title">{outfit ? 'Edit your outfit' : 'Put a look together'}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><label className="outfit-name">Outfit name<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label><div className="builder-layout"><div className="builder-pieces"><div className="builder-label">YOUR PIECES <span>TAP OR DRAG TO CANVAS</span></div><div className="builder-piece-list">{clothes.map((item) => <button key={item.id} className="builder-piece" draggable onClick={() => addItem(item.id)} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(item.id))}><img src={item.image_url} alt="" /><span>{item.category}<small>{item.color || item.subcategory || 'Piece'}</small></span></button>)}</div></div><div className="outfit-canvas" onDragOver={(event) => event.preventDefault()} onDrop={drop}><span className="canvas-label">CANVAS <span>{selected.length} PIECES</span></span>{selected.length ? <div className="canvas-items">{selected.map((item) => <div className="canvas-piece" key={item.id}><img src={item.image_url} alt={item.category} /><button className="icon-button" title="Remove from outfit" aria-label="Remove from outfit" onClick={() => setSelected((current) => current.filter((piece) => piece.id !== item.id))}>×</button><small>{item.category}</small></div>)}</div> : <div className="canvas-empty"><span>＋</span><strong>Drop a piece here</strong><small>Start with something you love.</small></div>}</div></div>{error && <p className="form-error" role="alert">{error}</p>}  <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy || !selected.length}>{busy ? 'Saving…' : outfit ? 'Save changes' : 'Save outfit'}</button></div></section></div>
 }

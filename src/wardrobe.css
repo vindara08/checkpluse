@@ -969,7 +969,7 @@ textarea:focus-visible {
     display: flex;
     justify-content: center;
     align-items: center;
-    align-items: safe center;
+    align-items: center;
     overflow-y: auto;
     padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
     background: #14261f99;
@@ -981,7 +981,7 @@ textarea:focus-visible {
     min-height: 0;
     max-height: min(calc(100dvh - 40px), 900px);
     flex: 0 1 auto;
-    margin-block: auto;
+    margin: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 26px;
@@ -1917,7 +1917,7 @@ textarea:focus-visible {
     border-color: var(--coral);
 }
 
-.home-stat > span,
+.home-stat>span,
 .home-stat small {
     color: var(--muted);
     font: 10px var(--mono);
@@ -2206,7 +2206,7 @@ textarea:focus-visible {
         padding-inline: 18px;
     }
 
-    .topbar > .top-nav {
+    .topbar>.top-nav {
         display: none;
     }
 
@@ -2385,7 +2385,7 @@ textarea:focus-visible {
         padding: 12px;
     }
 
-    .home-stat > span {
+    .home-stat>span {
         font-size: 8px;
     }
 
@@ -2400,6 +2400,11 @@ textarea:focus-visible {
     overscroll-behavior: contain;
 }
 
+.add-scrim {
+    align-items: flex-start;
+    padding: 0 20px;
+}
+
 .add-panel[data-step="1"] {
     scrollbar-width: none;
     scroll-padding-block: 20px 84px;
@@ -2411,7 +2416,7 @@ textarea:focus-visible {
 
 .add-panel form,
 .add-panel .add-step,
-.add-panel .form-grid > * {
+.add-panel .form-grid>* {
     min-width: 0;
 }
 
@@ -2695,8 +2700,8 @@ textarea:focus-visible {
     white-space: normal;
 }
 
-.profile-summary > div:not(.profile-avatar-control),
-.profile-action > span {
+.profile-summary>div:not(.profile-avatar-control),
+.profile-action>span {
     min-width: 0;
     display: grid;
     gap: 5px;
@@ -2708,7 +2713,7 @@ textarea:focus-visible {
     font-size: 14px;
 }
 
-.profile-summary > div:not(.profile-avatar-control) > span,
+.profile-summary>div:not(.profile-avatar-control)>span,
 .profile-action small {
     overflow-wrap: anywhere;
     color: var(--muted);
@@ -2955,7 +2960,7 @@ textarea:focus-visible {
     background: var(--paper);
 }
 
-.profile-document section + section {
+.profile-document section+section {
     border-top: 1px solid var(--line);
 }
 
@@ -2996,7 +3001,7 @@ textarea:focus-visible {
     background: #fff5f1;
 }
 
-.load-error > span {
+.load-error>span {
     min-width: 0;
     flex: 1 1 220px;
     overflow-wrap: anywhere;
