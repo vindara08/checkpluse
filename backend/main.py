@@ -18,11 +18,15 @@ from pydantic import BaseModel
 BACKEND_ENV_FILE = Path(__file__).resolve().parent / ".env"
 load_dotenv(BACKEND_ENV_FILE, override=False)
 
-APP_ORIGINS = [
+CONFIGURED_APP_ORIGINS = {
     origin.strip()
-    for origin in os.getenv("APP_ORIGINS", "http://localhost:5173").split(",")
+    for origin in os.getenv("APP_ORIGINS", "").split(",")
     if origin.strip()
-]
+}
+APP_ORIGINS = sorted(CONFIGURED_APP_ORIGINS | {
+    "http://localhost:5173",
+    "http://localhost:5174",
+})
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 20_000_000
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}

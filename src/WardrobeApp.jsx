@@ -16,6 +16,7 @@ const BUILT_IN_AVATARS = [
   { id: 'ochre', label: 'Ochre', src: '/avatars/fold-ochre.svg' },
 ]
 const DEFAULT_AVATAR_ID = 'fern'
+const AVATAR_REQUEST_TIMEOUT_MS = 10000
 const AUTH_CHECK_TIMEOUT_MS = 15000
 const WARDROBE_LOAD_TIMEOUT_MS = 30000
 
@@ -50,15 +51,25 @@ function AvatarImage({ value, initials, className = 'profile-avatar' }) {
 }
 
 async function requestProfileAvatar(session, method, avatarId) {
-  const options = { method, headers: { Authorization: `Bearer ${session.access_token}` } }
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), AVATAR_REQUEST_TIMEOUT_MS)
+  const options = { method, signal: controller.signal, headers: { Authorization: `Bearer ${session.access_token}` } }
   if (avatarId) {
     options.headers['Content-Type'] = 'application/json'
     options.body = JSON.stringify({ avatar_id: avatarId })
   }
-  const response = await fetch(`${API}/profile/avatar`, options)
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload.detail || 'Could not update your avatar.')
-  return payload
+  try {
+    const response = await fetch(`${API}/profile/avatar`, options)
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.detail || 'Could not update your avatar.')
+    return payload
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('Avatar request timed out. Please try again.')
+    if (error instanceof TypeError) throw new Error('Could not reach the avatar service. Check that the local API is running and try again.')
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 }
 
 function LoadingError({ message, onRetry }) {

@@ -58,7 +58,7 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 - [x] Provide manual clothing metadata entry, image compression, private object upload, signed image reads, and category filters.
 - [x] Enforce image type/size/dimension limits, remove EXIF metadata, and composite transparent pixels onto white.
 - [x] Correct the local Vite API URL to the running image API on port `8001` after finding the old port `8000` route returned 404.
-- [x] Configure and verify FastAPI CORS for the actual local frontend origin, `http://localhost:5173`.
+- [x] Configure and verify FastAPI CORS for the local frontend origins, `http://localhost:5173` and `http://localhost:5174`.
 - [ ] After allowing WebP, complete a signed-in, end-to-end upload and confirm both the private Storage object and its matching Postgres row.
 - [ ] Verify deletion removes the metadata and corresponding Storage object in the live project.
 
@@ -102,86 +102,19 @@ An upload is verified only when all of the following succeed for a signed-in tes
 - Local `backend/.env` now contains only the Supabase URL, publishable key, bucket name, and allowed frontend origin; no service-role/secret key was added. This configures the image API, but does not establish that the bucket/schema/policies are provisioned in the remote Supabase project.
 - Earlier automated checks: **9 backend tests passed**, Python compilation passed, frontend lint passed, production build passed with a temporary 512 MB Node heap, and editor diagnostics reported no errors. The build heap setting was only for that validation command.
 
+## Avatar transport update — 26 September 2026
+
+The built-in avatar transport issue was traced to CORS configuration rather than a new profile system. The frontend sends `PUT /api/profile/avatar` with JSON `{ "avatar_id": "fern" }`, an `Authorization` bearer token, and `Content-Type: application/json`. That request requires a preflight. The backend origin list did not reliably include the active Vite origin `http://localhost:5174` in every local launch configuration, so the preflight was rejected before the endpoint ran. FastAPI now preserves configured origins and explicitly allows the two local Vite origins `http://localhost:5173` and `http://localhost:5174`; the frontend example configuration documents both. The avatar request also has a bounded 10-second timeout with a useful failure message.
+
+Local verification now confirms the `OPTIONS` preflight for port 5174 returns HTTP 200 and permits `PUT`, `Authorization`, and `Content-Type`. The endpoint still validates the five IDs and scopes the Supabase update to the verified user's `profiles.id`.
+
+**Still pending:** the SQL migration has not been executed automatically, and persistence, refresh/re-login, and cross-user RLS behavior still require an authorized live Supabase test. Do not mark avatar database persistence as verified until that test succeeds.
+
 ## Next steps to finish live upload verification
 
 1. Create `wardrobe-images` as a **private** bucket in the Supabase Dashboard and apply the documented schema/RLS/Storage policies.
 2. Sign in with an authorized test account, add a harmless test image, and verify the WebP object and metadata row in the Supabase dashboard.
 3. Remove the test item and confirm both the metadata row and image are gone.
 4. Record any environment-specific issues here without adding credentials or personal data.
-
-## Development break state record
-
-Last reviewed: 26 September 2026
-
-### Current project architecture
-
-- The product is a responsive React + Vite web application with a mobile-first wardrobe UI and a laptop/desktop responsive layout. The codebase does not contain a separate native Android application; Android/mobile refers to the responsive browser experience.
-- The frontend entry point is `src/main.jsx`, with the primary application and existing UI flows in `src/WardrobeApp.jsx` and styling in `src/wardrobe.css`.
-- FastAPI in `backend/main.py` validates Supabase sessions for the image-compression route and built-in avatar routes. Pillow validates, resizes, reorients, and re-encodes clothing images.
-- Supabase Auth manages authentication. Supabase Postgres stores profiles, consent records, clothing metadata, outfits, and outfit-item links. RLS is intended to scope records to the authenticated user.
-- Supabase Storage is intended to hold private compressed WebP clothing photos in the `wardrobe-images` bucket. Built-in avatar artwork is bundled in `public/avatars`; the intended database value is an avatar identifier, not image data.
-- No Render deployment configuration or Render service definition was found in this repository. Render deployment therefore remains environment-specific and unverified here.
-
-### Completed features and UI changes
-
-Verified in the current source:
-
-- Mobile-first wardrobe experience with an editorial/minimal fashion-oriented visual direction and responsive laptop/desktop layout.
-- Fixed mobile bottom navigation with `Home | Wardrobe | + | Outfits | Profile`; the Add (+) action is the centered third item.
-- Desktop and mobile navigation, including the account hamburger/secondary menu where applicable.
-- Clothing photo upload, FastAPI image processing, Add Details, review, private Storage upload flow, category filters, search, and wardrobe display.
-- Clothing metadata editing for existing items without replacing the stored image or creating a duplicate clothing row.
-- Outfit creation with tap/drag selection, naming, duplicate prevention, saved outfit display, and editing of an existing outfit's name and clothing links.
-- Clothing deletion checks outfit dependencies first, warns before deleting dependent outfits, removes only affected outfits after confirmation, and refreshes the wardrobe/outfit state.
-- Profile, Security, Account, and Privacy UI, including profile name editing, export, sign-out, account deletion controls, theme selection, consent-related copy, and security/privacy copy.
-- Authentication/loading lifecycle recovery for returning to the application after browser tab switching, including stale-load recovery and retry handling.
-- The Add Picture/Add a Piece panel uses a fixed viewport scrim. On laptop/desktop it is now anchored to the top edge of the visible viewport and is not positioned by document flow. Existing mobile bottom-sheet behavior remains controlled by the mobile media rule.
-- The codebase contains no separate Perfect Match feature or recommendation engine. Current outfit functionality is the saved outfit builder and outfit views; do not record Perfect Match as completed unless it is added and verified later.
-
-### Avatar system: current status
-
-The built-in avatar interface and bundled avatar artwork are present and working visually. Users can open Profile, choose one of the built-in avatars, and save through the FastAPI avatar route. The frontend allowlist, backend identifier validation, and manual `profiles.avatar_id` migration draft are present.
-
-**OPEN ISSUE / PENDING:** avatar data/state is not currently transferring or persisting correctly across the complete frontend, backend, and database flow. This needs investigation in the next development session. Do not replace the built-in selectable avatar system with profile-picture upload, arbitrary URLs, or avatar Storage uploads. The intended model remains a stable built-in avatar identifier such as `fern` or `indigo`; verify the exact deployed database/API contract against the actual Supabase schema before changing it.
-
-### Known bugs and remaining issues
-
-**Confirmed or explicitly pending:**
-
-- Avatar selection is visually functional, but avatar state/data persistence across the relevant frontend/backend/database flow is still pending investigation.
-- Live Supabase upload, Storage bucket MIME configuration, deployed schema, and RLS behavior still require an authorized signed-in verification pass, as described above.
-
-**Pending verification:**
-
-- Confirm the actual deployed `profiles` schema, `avatar_id` migration state, grants, and RLS policies before changing avatar persistence.
-- Verify the top-anchored desktop Add Picture panel in an actual browser at multiple laptop sizes, while scrolling the page behind it and resizing the window.
-- Verify mobile navigation, upload/add flow, outfit creation/editing, clothing editing/deletion, authentication recovery, and privacy/account actions in an authenticated browser session.
-- Verify the deployment environment, including any Render configuration outside this repository.
-
-**Future improvements:**
-
-- Complete the avatar persistence fix without changing the built-in avatar approach.
-- Complete live Supabase upload and RLS acceptance testing after the required project configuration is available.
-- Add or document any future Perfect Match behavior only after a real implementation exists.
-
-### Important design decisions
-
-- Keep built-in selectable avatars. Do not turn avatars into profile-picture uploads.
-- Store an avatar identifier/reference, not uploaded image bytes or arbitrary avatar URLs.
-- Avoid backend, database, or Storage changes for purely visual UI fixes.
-- Preserve the working mobile UI and keep the mobile Add (+) action centered and symmetric.
-- Keep the desktop Add Picture panel anchored to the visible viewport, now at the top edge rather than the document/page bottom.
-- Preserve the editorial/minimal wardrobe aesthetic and avoid generic SaaS-dashboard redesigns.
-- Prefer targeted, reversible changes and do not rewrite working components without a specific requirement.
-
-### Resume checklist
-
-1. Investigate why selected avatar data/state is not transferring or persisting correctly.
-2. Verify the avatar database/API contract against the actual deployed schema.
-3. Fix avatar persistence without replacing the built-in avatar approach.
-4. Test avatar persistence after refresh and re-login where applicable.
-5. Verify the desktop Add Picture panel remains anchored to the top of the visible viewport.
-6. Run final responsive regression tests on mobile and laptop/desktop.
-7. Check that the previously fixed loading/authentication behavior has not regressed.
 
 The legal copy and technical controls are implementation aids, not a legal-compliance certification. Have the actual service operation and user-facing terms reviewed for applicable India requirements before production use.

@@ -54,3 +54,11 @@ npm run lint
 npm run build
 .\.venv\Scripts\python.exe -m pytest -q
 ```
+
+## Current avatar status
+
+The app uses five bundled, selectable avatars: `fern`, `terracotta`, `sage`, `indigo`, and `ochre`. The browser sends the selected identifier to FastAPI at `PUT /api/profile/avatar`; FastAPI validates the identifier and updates the authenticated user's existing `profiles.avatar_id` value through Supabase. No profile image upload or avatar Storage bucket is used.
+
+Local development CORS allows both `http://localhost:5173` and `http://localhost:5174`, in addition to any origins listed in `backend/.env`. The avatar request has a bounded 10-second timeout and reports backend errors to the user. Run the manual avatar migration in `supabase/migrations/20260926_add_profiles_avatar_id.sql` only after reviewing the deployed schema and RLS policies; SQL is not executed by the application.
+
+The CORS/preflight and frontend/backend contract are covered by local tests. Persistence through the actual Supabase project, refresh/re-login behavior, and two-user RLS verification still require an authorized live test account.

@@ -31,6 +31,25 @@ $$;
 
 grant update (avatar_id) on public.profiles to authenticated;
 
+alter table public.profiles enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'profiles'
+      and policyname = 'Profiles editable by owner'
+  ) then
+    create policy "Profiles editable by owner" on public.profiles
+      for update to authenticated
+      using ((select auth.uid()) = id)
+      with check ((select auth.uid()) = id);
+  end if;
+end;
+$$;
+
 notify pgrst, 'reload schema';
 
 commit;

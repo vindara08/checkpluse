@@ -234,13 +234,13 @@ If Supabase already has an `avatar_path` column from a prior manual run, keep it
 
 ## 3. Configure signup email behavior
 
-In **Authentication → URL Configuration**, set the local Site URL to `http://localhost:5173` and add the production frontend URL before deployment. Configure email confirmation as desired. When confirmation is enabled, signup records the account/consent in Auth and the user must confirm their email before getting an authenticated session.
+In **Authentication → URL Configuration**, set the local Site URL to the active Vite origin (`http://localhost:5173` or `http://localhost:5174`) and add the production frontend URL before deployment. Configure email confirmation as desired. When confirmation is enabled, signup records the account/consent in Auth and the user must confirm their email before getting an authenticated session.
 
 ## 4. Configure local environment
 
 Copy the root `.env.example` to `.env.local`; copy `backend/.env.example` to `backend/.env`. Set the same project URL and publishable key in each. These `sb_publishable_...` keys are intended for browser use; never substitute a service-role/secret key.
 
-The API loads `backend/.env` automatically. Set `APP_ORIGINS` to the exact Vite origin, such as `http://localhost:5173` or the configured local frontend origin. Then start:
+The API loads `backend/.env` automatically. Set `APP_ORIGINS` to comma-separated production/LAN origins as needed; local Vite origins `http://localhost:5173` and `http://localhost:5174` are allowed by the API. Then start:
 
 ```powershell
 # Terminal 1 (project root)
@@ -270,5 +270,24 @@ Restart Vite after changing `.env.local`, and restart FastAPI after changing `ba
 - `PUT /api/profile/avatar` accepts `{"avatar_id":"indigo"}`. FastAPI validates the ID against the bundled set, scopes the PostgREST update to the authenticated user's `profiles.id`, and returns the saved ID.
 - No image or file upload is accepted by these avatar routes. The frontend resolves the ID to a local SVG asset.
 - Errors use FastAPI's `{"detail":"..."}` shape. Invalid IDs return `422`; missing/expired authentication returns `401`; missing profile returns `404`; upstream database failures return `502`.
+
+## 7. Avatar migration to run manually
+
+The current avatar design keeps the selected built-in identifier on the existing `public.profiles` row. The five accepted values are `fern`, `terracotta`, `sage`, `indigo`, and `ochre`. The migration adds `avatar_id text`, backfills existing rows to `fern`, sets the default and non-null constraint, adds an allowlist check constraint, and grants the authenticated role permission to update that column. It does not create a profile-image table, Storage bucket, foreign key, or image upload path.
+
+Run the complete migration in [`supabase/migrations/20260926_add_profiles_avatar_id.sql`](./supabase/migrations/20260926_add_profiles_avatar_id.sql) manually after checking the deployed schema. It is intentionally not executed by FastAPI or the frontend. Existing owner-only profile RLS remains the security boundary:
+
+```sql
+using ((select auth.uid()) = id)
+with check ((select auth.uid()) = id)
+```
+
+The migration preserves existing profile rows and does not replace the current `profiles` table. If an unexpected avatar column or unsupported existing values are present, stop and resolve those values/schema differences before running it.
+
+## 8. Local API origins and avatar flow
+
+`backend/APP_ORIGINS` may contain comma-separated production and LAN origins. FastAPI preserves those configured origins and also allows the local Vite origins `http://localhost:5173` and `http://localhost:5174`; it never uses `allow_origins=["*"]`. Restart FastAPI after changing the environment. The frontend calls `PUT http://localhost:8001/api/profile/avatar` with the Supabase access token and a JSON avatar identifier. FastAPI verifies the token through Supabase Auth, updates only the verified user's profile row through PostgREST, and returns the saved identifier.
+
+The local preflight contract is covered by the backend test suite. Live database persistence, refresh/re-login behavior, and cross-user RLS isolation must still be tested with an authorized Supabase account.
 
 The service-role key is neither required nor used. Keep `.env.local` and `backend/.env` out of source control. Review Supabase backups, region, email settings, retention, and India-specific legal/grievance obligations before real-user launch. The supplied legal copy is not legal advice or a compliance certification.

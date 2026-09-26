@@ -127,6 +127,21 @@ def test_avatar_get_returns_current_builtin_selection(client, monkeypatch):
     assert response.json() == {"avatar_id": "fern"}
 
 
+def test_avatar_preflight_allows_local_frontend_origins(client):
+    response = client.options(
+        "/api/profile/avatar",
+        headers={
+            "Origin": "http://localhost:5174",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5174"
+    assert "PUT" in response.headers["access-control-allow-methods"]
+
+
 def test_avatar_update_saves_allowed_id_for_authenticated_profile(client, monkeypatch):
     mock_user_verification(monkeypatch, body={"id": "owner-uuid"})
     updates = []
