@@ -1787,6 +1787,28 @@ textarea:focus-visible {
     background: #1d1e1b;
 }
 
+.theme-dark .add-panel .detected-item,
+.theme-dark .add-panel .reviewed-item {
+    border-color: var(--line);
+    background: #2a2c27;
+}
+
+.theme-dark .form-error {
+    border-color: #bd8174;
+    color: #f0c1b5;
+    background: #382a27;
+}
+
+.theme-dark .add-panel input::placeholder,
+.theme-dark .add-panel textarea::placeholder {
+    color: #aaa69d;
+    opacity: 1;
+}
+
+.theme-dark .add-panel select {
+    color-scheme: dark;
+}
+
 .theme-dark .outfit-canvas {
     border-color: #56614f;
     background: radial-gradient(#41473b 1px, transparent 1px) 0 0 / 15px 15px, #20221e;
@@ -2433,7 +2455,7 @@ textarea:focus-visible {
     margin: 12px 0 18px;
     padding: 16px;
     border: 1px solid var(--line);
-    background: #f8faf6;
+    background: var(--canvas);
 }
 
 .add-panel .detected-item legend {
@@ -2447,7 +2469,7 @@ textarea:focus-visible {
     margin-top: 12px;
     padding: 14px;
     border: 1px solid var(--line);
-    background: #f8faf6;
+    background: var(--canvas);
 }
 
 .add-panel .reviewed-item h3 {
@@ -2457,13 +2479,21 @@ textarea:focus-visible {
 
 .add-panel .reviewed-item p {
     margin: 5px 0;
-    color: #6f7972;
+    color: var(--muted);
     font-size: 12px;
 }
 
 .add-panel .reviewed-item small {
-    color: #879189;
+    color: var(--muted);
     font-size: 10px;
+}
+
+.add-panel .form-helper {
+    color: var(--muted);
+}
+
+.add-panel select {
+    color-scheme: light;
 }
 
 .add-panel .form-grid input,

@@ -63,6 +63,10 @@ Main 9 began as a separate prototype. Its existing analysis function, segmentati
 
 The shipped model uses `imgsz=416`, `conf=0.5`, and `agnostic_nms=True`. It does not detect shoes or infer fabric, brands, prices, or sizes. Analysis is provisional and has no Supabase write access. Permanent image uploads and database inserts happen only after the user confirms the reviewed list.
 
+## Current wardrobe data contract
+
+The API/UI contract for The Fold exposes clothing type, category, dominant/secondary colors, color family, brightness, and pattern. Model confidence is internal pipeline metadata only: confidence values are not returned in the API response, shown in the wardrobe UI, exported, or stored in wardrobe rows. Season, formality, and occasion are user-provided, start empty for each detected item, and must be explicitly selected per item before a save; notes remain optional free text.
+
 ---
 
 # 4. Technology Stack

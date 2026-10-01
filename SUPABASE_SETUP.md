@@ -59,11 +59,9 @@ create table if not exists public.clothing_items (
   color_family text check (color_family is null or char_length(color_family) <= 40),
   brightness text check (brightness is null or char_length(brightness) <= 30),
   pattern text check (pattern is null or char_length(pattern) <= 40),
-  pattern_confidence double precision check (pattern_confidence is null or pattern_confidence between 0 and 1),
-  detection_confidence double precision check (detection_confidence is null or detection_confidence between 0 and 1),
-  season text not null default '' check (char_length(season) <= 30),
-  formality text not null default '' check (char_length(formality) <= 40),
-  occasion text not null default '' check (char_length(occasion) <= 60),
+  season text not null check (season <> '' and char_length(season) <= 30),
+  formality text not null check (formality <> '' and char_length(formality) <= 40),
+  occasion text not null check (occasion <> '' and char_length(occasion) <= 60),
   notes text not null default '' check (char_length(notes) <= 500),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -259,9 +257,9 @@ If Supabase already has an `avatar_path` column from a prior manual run, keep it
 
 ### Existing deployments: structured Main 9 attributes
 
-For an existing installation created with the earlier `color` and `subcategory` columns, review the deployed `public.clothing_items` schema and apply [`supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql`](./supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql) manually before deploying the matching frontend. It renames `color` to `dominant_color` and `subcategory` to `clothing_type` in place, preserving their values and all wardrobe/outfit IDs. It adds separate color, pattern, confidence, formality, occasion, and update timestamp columns. It does not parse, rewrite, or delete any existing `notes`.
+For an existing installation created with the earlier `color` and `subcategory` columns, review the deployed `public.clothing_items` schema and apply [`supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql`](./supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql) manually before deploying the matching frontend. It renames `color` to `dominant_color` and `subcategory` to `clothing_type` in place, preserving their values and all wardrobe/outfit IDs. It adds separate color, pattern, formality, occasion, and update timestamp columns. Legacy blank context values remain readable; `NOT VALID` constraints require non-empty context values on new or updated records without scanning or rejecting historical rows. Confidence columns, if present, are removed because they are model metadata rather than wardrobe data. Existing `notes` are preserved verbatim.
 
-The existing `image_path` uniqueness and outfit relationships remain unchanged. When one photo yields multiple clothing items, the app saves a separate copy of the reviewed photo under each item's unique Storage path and inserts one `clothing_items` row per item. This keeps deletion and outfits attached to individual wardrobe item IDs without adding a new image table.
+The migration backfills existing null formality/occasion to blank strings but preserves historical season/formality/occasion values; those existing rows are not parsed or deleted. `NOT VALID` check constraints preserve legacy rows while requiring non-empty context on new or updated rows. The existing `image_path` uniqueness and outfit relationships remain unchanged. When one photo yields multiple clothing items, the app saves a separate copy of the reviewed photo under each item's unique Storage path and inserts one `clothing_items` row per item. This keeps deletion and outfits attached to individual wardrobe item IDs without adding a new image table.
 
 ## 3. Configure signup email behavior
 

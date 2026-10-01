@@ -301,14 +301,6 @@ def analyze_uploaded_image(data: bytes) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="Main 9 returned an invalid analysis result.")
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message") or "No supported clothing was detected in that image.")
-    items = result.get("items")
-    if not isinstance(items, list) or not items:
-        raise HTTPException(status_code=502, detail="Main 9 returned no analyzed clothing items.")
-    logger.info(
-        "Main 9 returning %s analyzed clothing items: %s",
-        len(items),
-        ", ".join(str(item.get("clothing_type", "unknown")) for item in items if isinstance(item, dict)),
-    )
     return result
 
 
@@ -357,4 +349,18 @@ def analyze_upload(
     image_bytes = photo.file.read(MAX_UPLOAD_BYTES + 1)
     if len(image_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Choose an image no larger than 8 MB.")
-    return analyze_uploaded_image(image_bytes)
+    result = analyze_uploaded_image(image_bytes)
+    items = result.get("items")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=502, detail="Main 9 returned no analyzed clothing items.")
+    if not all(isinstance(item, dict) for item in items):
+        raise HTTPException(status_code=502, detail="Main 9 returned an invalid clothing item.")
+    for item in items:
+        item.pop("detection_confidence", None)
+        item.pop("pattern_confidence", None)
+    logger.info(
+        "Main 9 returning %s analyzed clothing items: %s",
+        len(items),
+        ", ".join(str(item.get("clothing_type", "unknown")) for item in items),
+    )
+    return result

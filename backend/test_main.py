@@ -261,25 +261,21 @@ def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch
             "detection_index": 0,
             "category": "Top",
             "clothing_type": "short_sleeve_top",
-            "detection_confidence": 0.91,
             "dominant_color": "Blue",
             "secondary_color": "White",
             "color_family": "Blue",
             "brightness": "Medium",
             "pattern": "striped",
-            "pattern_confidence": 0.87,
         },
         {
             "detection_index": 1,
             "category": "Bottom",
             "clothing_type": "trousers",
-            "detection_confidence": 0.88,
             "dominant_color": "Black",
             "secondary_color": "Gray",
             "color_family": "Black",
             "brightness": "Dark",
             "pattern": "solid",
-            "pattern_confidence": 0.94,
         },
     ]
     monkeypatch.setattr(
@@ -288,7 +284,10 @@ def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch
         lambda data: {
             "success": True,
             "message": "Clothing detected successfully.",
-            "items": analyzed_items,
+            "items": [
+                {**item, "detection_confidence": 0.9, "pattern_confidence": 0.8}
+                for item in analyzed_items
+            ],
         },
     )
 
@@ -301,20 +300,26 @@ def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch
     assert response.status_code == 200
     assert response.json()["success"] is True
     assert response.json()["items"] == analyzed_items
+    assert "detection_confidence" not in response.json()["items"][0]
+    assert "pattern_confidence" not in response.json()["items"][0]
 
 
-def test_analyze_uploaded_image_rejects_success_without_analyzed_items(monkeypatch):
+def test_analyze_upload_rejects_success_without_analyzed_items(client, monkeypatch):
+    mock_user_verification(monkeypatch)
     monkeypatch.setattr(
         api,
-        "load_main9_module",
-        lambda: SimpleNamespace(analyze_image=lambda image_path: {"success": True, "items": []}),
+        "analyze_uploaded_image",
+        lambda data: {"success": True, "items": []},
     )
 
-    with pytest.raises(api.HTTPException) as result:
-        api.analyze_uploaded_image(png_bytes())
+    response = client.post(
+        "/api/images/analyze",
+        headers={"Authorization": "Bearer test-token"},
+        files={"photo": ("shirt.png", png_bytes(), "image/png")},
+    )
 
-    assert result.value.status_code == 502
-    assert "no analyzed clothing items" in result.value.detail.lower()
+    assert response.status_code == 502
+    assert "no analyzed clothing items" in response.json()["detail"].lower()
 
 
 def test_compress_image_reencodes_to_webp_and_bounds_dimensions():

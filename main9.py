@@ -620,8 +620,6 @@ def analyze_image(image_path):
 
         class_id = detection["class_id"]
 
-        confidence = detection["confidence"]
-
         class_name = result.names[class_id]
 
         # ----------------------------------------------------
@@ -779,7 +777,7 @@ def analyze_image(image_path):
         # PATTERN
         # ----------------------------------------------------
 
-        pattern, pattern_confidence = detect_pattern(
+        pattern, _ = detect_pattern(
             image_rgb,
             mask
         )
@@ -796,11 +794,7 @@ def analyze_image(image_path):
 
             "category": category,
 
-            "detection_confidence": confidence,
-
             "pattern": pattern,
-
-            "pattern_confidence": pattern_confidence,
 
             "dominant_color": dominant_color,
 
@@ -1415,20 +1409,8 @@ class ClothingAnalyzerApp:
 
                 self.result_text.insert(
                     tk.END,
-                    f"Detection confidence: "
-                    f"{item['detection_confidence']:.2f}\n\n"
-                )
-
-                self.result_text.insert(
-                    tk.END,
                     f"Pattern: "
                     f"{item['pattern']}\n"
-                )
-
-                self.result_text.insert(
-                    tk.END,
-                    f"Pattern confidence: "
-                    f"{item['pattern_confidence']:.2f}\n\n"
                 )
 
                 self.result_text.insert(

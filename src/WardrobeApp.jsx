@@ -17,6 +17,15 @@ const AI_CATEGORY_MAP = {
 const seasonOptions = ['Spring', 'Summer', 'Monsoon', 'Autumn', 'Winter', 'All Season', 'All season']
 const formalityOptions = ['Casual / Informal', 'Smart Casual', 'Formal']
 const occasionOptions = ['Daily Wear', 'College', 'Office', 'Party', 'Travel', 'Sports', 'Wedding / Traditional', 'Other']
+const requiredUserContext = [
+  ['season', 'Season'],
+  ['formality', 'Formality'],
+  ['occasion', 'Occasion'],
+]
+
+function missingUserContext(item) {
+  return requiredUserContext.find(([field]) => !item[field]?.trim())
+}
 const BUILT_IN_AVATARS = [
   { id: 'fern', label: 'Fern', src: '/avatars/fold-fern.svg' },
   { id: 'terracotta', label: 'Terracotta', src: '/avatars/fold-terracotta.svg' },
@@ -366,8 +375,6 @@ function ClothingEditor({ item, onClose, onSaved }) {
   const [colorFamily, setColorFamily] = useState(item.color_family || '')
   const [brightness, setBrightness] = useState(item.brightness || '')
   const [pattern, setPattern] = useState(item.pattern || '')
-  const [patternConfidence, setPatternConfidence] = useState(item.pattern_confidence ?? '')
-  const [detectionConfidence, setDetectionConfidence] = useState(item.detection_confidence ?? '')
   const [season, setSeason] = useState(item.season || '')
   const [formality, setFormality] = useState(item.formality || '')
   const [occasion, setOccasion] = useState(item.occasion || '')
@@ -376,6 +383,11 @@ function ClothingEditor({ item, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   async function save(event) {
     event.preventDefault()
+    const missing = missingUserContext({ season, formality, occasion })
+    if (missing) {
+      setError(`Select ${missing[1]} before saving this item.`)
+      return
+    }
     setBusy(true)
     setError('')
     const changes = {
@@ -386,8 +398,6 @@ function ClothingEditor({ item, onClose, onSaved }) {
       color_family: colorFamily.trim() || null,
       brightness: brightness.trim() || null,
       pattern: pattern.trim() || null,
-      pattern_confidence: patternConfidence === '' ? null : Number(patternConfidence),
-      detection_confidence: detectionConfidence === '' ? null : Number(detectionConfidence),
       season,
       formality,
       occasion,
@@ -406,7 +416,7 @@ function ClothingEditor({ item, onClose, onSaved }) {
   return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-clothing-title">
       <div className="modal-heading"><div><span className="eyebrow">EDIT YOUR PIECE</span><h2 id="edit-clothing-title">Update details</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
-      <form className="form-grid" onSubmit={save}>
+      <form className="form-grid" noValidate onSubmit={save}>
         <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
         <label>Clothing type<input value={clothingType} onChange={(event) => setClothingType(event.target.value)} maxLength={60} /></label>
         <label>Dominant color<input value={dominantColor} onChange={(event) => setDominantColor(event.target.value)} maxLength={40} /></label>
@@ -414,11 +424,9 @@ function ClothingEditor({ item, onClose, onSaved }) {
         <label>Color family<input value={colorFamily} onChange={(event) => setColorFamily(event.target.value)} maxLength={40} /></label>
         <label>Brightness<input value={brightness} onChange={(event) => setBrightness(event.target.value)} maxLength={30} /></label>
         <label>Pattern<input value={pattern} onChange={(event) => setPattern(event.target.value)} maxLength={40} /></label>
-        <label>Pattern confidence<input type="number" min="0" max="1" step="0.01" value={patternConfidence} onChange={(event) => setPatternConfidence(event.target.value)} /></label>
-        <label>Detection confidence<input type="number" min="0" max="1" step="0.01" value={detectionConfidence} onChange={(event) => setDetectionConfidence(event.target.value)} /></label>
-        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-        <label>Formality<select value={formality} onChange={(event) => setFormality(event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-        <label>Occasion<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Season *<select name="season" required value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Choose season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Formality *<select name="formality" required value={formality} onChange={(event) => setFormality(event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Occasion *<select name="occasion" required value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
         <label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={4} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="modal-actions wide-field"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
@@ -440,8 +448,6 @@ function ClothingDetails({ item, onClose, onDelete, onEdit }) {
           {item.color_family && <div><dt>Color family</dt><dd>{item.color_family}</dd></div>}
           {item.brightness && <div><dt>Brightness</dt><dd>{item.brightness}</dd></div>}
           {item.pattern && <div><dt>Pattern</dt><dd>{item.pattern}</dd></div>}
-          {item.pattern_confidence != null && <div><dt>Pattern confidence</dt><dd>{item.pattern_confidence}</dd></div>}
-          {item.detection_confidence != null && <div><dt>Detection confidence</dt><dd>{item.detection_confidence}</dd></div>}
           {item.season && <div><dt>Season</dt><dd>{item.season}</dd></div>}
           {item.formality && <div><dt>Formality</dt><dd>{item.formality}</dd></div>}
           {item.occasion && <div><dt>Occasion</dt><dd>{item.occasion}</dd></div>}
@@ -558,8 +564,6 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       color_family: String(candidate.color_family || ''),
       brightness: String(candidate.brightness || ''),
       pattern: String(candidate.pattern || ''),
-      pattern_confidence: candidate.pattern_confidence ?? '',
-      detection_confidence: candidate.detection_confidence ?? '',
       season: '',
       formality: '',
       occasion: '',
@@ -571,6 +575,18 @@ function AddClothing({ session, userId, onClose, onSaved }) {
 
   function updateItem(index, field, value) {
     setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item))
+  }
+
+  function validateUserContext() {
+    const missingIndex = items.findIndex((item) => missingUserContext(item))
+    if (missingIndex < 0) return true
+    const missing = missingUserContext(items[missingIndex])
+    setError(`Select ${missing[1]} for Item ${missingIndex + 1} before continuing.`)
+    setStep(1)
+    window.requestAnimationFrame(() => {
+      document.querySelector(`.detected-item[data-item-index="${missingIndex}"] [name="${missing[0]}"]`)?.focus()
+    })
+    return false
   }
 
   async function submit(event) {
@@ -593,11 +609,13 @@ function AddClothing({ session, userId, onClose, onSaved }) {
     }
     if (step === 1) {
       if (!items.length) { setError('Keep at least one detected clothing item to continue.'); return }
+      if (!validateUserContext()) return
       setError('')
       setStep(2)
       return
     }
     if (!file || !items.length) { setStep(0); setError('Choose a photo and review at least one clothing item.'); return }
+    if (!validateUserContext()) return
     setBusy(true)
     setError('')
     const imagePaths = items.map(() => `${userId}/${createObjectId()}.webp`)
@@ -630,8 +648,6 @@ function AddClothing({ session, userId, onClose, onSaved }) {
         color_family: item.color_family.trim() || null,
         brightness: item.brightness.trim() || null,
         pattern: item.pattern.trim() || null,
-        pattern_confidence: item.pattern_confidence === '' ? null : Number(item.pattern_confidence),
-        detection_confidence: item.detection_confidence === '' ? null : Number(item.detection_confidence),
         season: item.season,
         formality: item.formality,
         occasion: item.occasion,
@@ -655,7 +671,7 @@ function AddClothing({ session, userId, onClose, onSaved }) {
   return <div className="modal-scrim add-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel add-panel" data-step={step} role="dialog" aria-modal="true" aria-labelledby="add-title">
     <div className="modal-heading"><div><div className="eyebrow">ADD TO YOUR WARDROBE · {String(step + 1).padStart(2, '0')} / 03</div><h2 id="add-title">{stepTitles[step]}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
     <div className="step-track" aria-label={`Step ${step + 1} of 3`}><span className={step >= 0 ? 'complete' : ''} /><span className={step >= 1 ? 'complete' : ''} /><span className={step >= 2 ? 'complete' : ''} /></div>
-    <form onSubmit={submit} onFocus={(event) => { if (step === 1) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}>
+    <form noValidate onSubmit={submit} onFocus={(event) => { if (step === 1) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}>
       {step === 0 && <div className="add-step">
         <label className={`upload-zone${preview ? ' has-preview' : ''}`}>{preview ? <><img src={preview} alt="Selected clothing preview" /><span className="upload-change">Choose a different photo</span></> : <><span className="upload-icon">＋</span><strong>Choose a photo or take one</strong><span>JPG, PNG or WebP · up to 8 MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} /></label>
         <p className="form-helper">A clear photo makes your digital closet easier to browse.</p>
@@ -663,7 +679,7 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       {step === 1 && <div className="add-step add-review-list">
         <p className="form-helper">Main 9 found {items.length} clothing {items.length === 1 ? 'item' : 'items'}. Review and correct each suggestion before saving.</p>
         {preview && <img className="form-preview" src={preview} alt="Photo analyzed by Main 9" />}
-        {items.map((item, index) => <fieldset className="detected-item" key={`${item.detection_index ?? 'item'}-${index}`}>
+        {items.map((item, index) => <fieldset className="detected-item" data-item-index={index} key={`${item.detection_index ?? 'item'}-${index}`}>
           <legend>ITEM {index + 1} OF {items.length}</legend>
           <div className="form-grid">
             <label>Category<select value={item.category} onChange={(event) => updateItem(index, 'category', event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
@@ -673,11 +689,9 @@ function AddClothing({ session, userId, onClose, onSaved }) {
             <label>Color family<input value={item.color_family} onChange={(event) => updateItem(index, 'color_family', event.target.value)} maxLength={40} /></label>
             <label>Brightness<input value={item.brightness} onChange={(event) => updateItem(index, 'brightness', event.target.value)} maxLength={30} /></label>
             <label>Pattern<input value={item.pattern} onChange={(event) => updateItem(index, 'pattern', event.target.value)} maxLength={40} /></label>
-            <label>Pattern confidence<input type="number" min="0" max="1" step="0.01" value={item.pattern_confidence} onChange={(event) => updateItem(index, 'pattern_confidence', event.target.value)} /></label>
-            <label>Detection confidence<input type="number" min="0" max="1" step="0.01" value={item.detection_confidence} onChange={(event) => updateItem(index, 'detection_confidence', event.target.value)} /></label>
-            <label>Season<select value={item.season} onChange={(event) => updateItem(index, 'season', event.target.value)}><option value="">Choose season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Formality<select value={item.formality} onChange={(event) => updateItem(index, 'formality', event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Occasion<select value={item.occasion} onChange={(event) => updateItem(index, 'occasion', event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Season *<select name="season" required value={item.season} onChange={(event) => updateItem(index, 'season', event.target.value)}><option value="">Choose season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Formality *<select name="formality" required value={item.formality} onChange={(event) => updateItem(index, 'formality', event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Occasion *<select name="occasion" required value={item.occasion} onChange={(event) => updateItem(index, 'occasion', event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label className="wide-field">Notes<textarea value={item.notes} onChange={(event) => updateItem(index, 'notes', event.target.value)} maxLength={500} rows={3} placeholder="Anything you want to remember" /></label>
           </div>
         </fieldset>)}
@@ -689,7 +703,6 @@ function AddClothing({ session, userId, onClose, onSaved }) {
           <h3>{item.clothing_type.replace(/_/g, ' ')}</h3>
           <p>{[item.category, item.dominant_color, item.secondary_color, item.color_family, item.brightness, item.pattern, item.season, item.formality, item.occasion].filter(Boolean).join(' · ')}</p>
           {item.notes.trim() && <p>{item.notes}</p>}
-          <small>Pattern confidence: {item.pattern_confidence === '' ? 'not provided' : item.pattern_confidence} · Detection confidence: {item.detection_confidence === '' ? 'not provided' : item.detection_confidence}</small>
         </article>)}
         <p className="form-helper">Nothing is uploaded to your wardrobe or added to the database until you save.</p>
       </section>}
@@ -971,7 +984,7 @@ export default function WardrobeApp() {
   async function exportData() {
     try {
       const [items, savedOutfits, links, consent] = await Promise.all([
-        supabase.from('clothing_items').select('id,category,clothing_type,dominant_color,secondary_color,color_family,brightness,pattern,pattern_confidence,detection_confidence,season,formality,occasion,notes,image_path,created_at,updated_at').eq('user_id', userId),
+        supabase.from('clothing_items').select('id,category,clothing_type,dominant_color,secondary_color,color_family,brightness,pattern,season,formality,occasion,notes,image_path,created_at,updated_at').eq('user_id', userId),
         supabase.from('outfits').select('id,name,created_at').eq('user_id', userId),
         supabase.from('outfit_items').select('outfit_id,clothing_id,position'),
         supabase.from('consent_records').select('consent_type,version,accepted_at').eq('user_id', userId),

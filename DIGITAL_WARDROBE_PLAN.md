@@ -32,7 +32,7 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 2. Read and accept the terms and privacy notice, and confirm the age requirement.
 3. Sign in and open the wardrobe.
 4. Select or take a clothing photo and request temporary Main 9 analysis.
-5. Review every duplicate-filtered detection independently and correct all AI fields; enter season, formality, occasion, and optional notes for each piece.
+5. Review every duplicate-filtered detection independently and correct all AI fields; explicitly select season, formality, and occasion for each piece, with optional notes.
 6. After the user confirms Save, process the photo through FastAPI/Pillow and upload the compressed WebP to the private Storage bucket under the signed-in user's UUID.
 7. Save one user-approved metadata row and unique Storage object path per detected piece in Postgres.
 8. View, filter, or remove clothing; use pieces in the drag-and-drop outfit builder and save outfits.
@@ -57,6 +57,7 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 
 - [x] Integrate Main 9 analysis before save; the AI is provisional and cannot write to Storage or Postgres.
 - [x] Review/edit all detections and structured Main 9 attributes; preserve individual clothing IDs for outfits.
+- [x] Require explicit per-item season, formality, and occasion choices; keep AI confidence scores out of wardrobe data.
 - [x] Provide image compression, private object upload, signed image reads, and category filters.
 - [ ] Review and manually apply the structured wardrobe migration to the configured Supabase project before deploying this frontend.
 - [x] Enforce image type/size/dimension limits, remove EXIF metadata, and composite transparent pixels onto white.
