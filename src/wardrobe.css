@@ -2428,6 +2428,44 @@ textarea:focus-visible {
     min-width: 0;
 }
 
+.add-panel .detected-item {
+    min-width: 0;
+    margin: 12px 0 18px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    background: #f8faf6;
+}
+
+.add-panel .detected-item legend {
+    padding: 0 7px;
+    color: var(--green);
+    font: 9px var(--mono);
+    letter-spacing: .08em;
+}
+
+.add-panel .reviewed-item {
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    background: #f8faf6;
+}
+
+.add-panel .reviewed-item h3 {
+    margin: 0 0 7px;
+    text-transform: capitalize;
+}
+
+.add-panel .reviewed-item p {
+    margin: 5px 0;
+    color: #6f7972;
+    font-size: 12px;
+}
+
+.add-panel .reviewed-item small {
+    color: #879189;
+    font-size: 10px;
+}
+
 .add-panel .form-grid input,
 .add-panel .form-grid select,
 .add-panel .form-grid textarea {
@@ -2483,6 +2521,10 @@ textarea:focus-visible {
     .add-panel[data-step="1"] .form-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 13px;
+    }
+
+    .add-panel .detected-item {
+        padding: 12px;
     }
 
     .add-panel .form-preview {

@@ -1,4 +1,6 @@
 import io
+from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -93,6 +95,22 @@ def test_rejects_invalid_supabase_session(client, monkeypatch):
     )
     assert response.status_code == 401
     assert "expired" in response.json()["detail"].lower()
+
+
+def test_rejects_revoked_supabase_session_as_unauthorized(client, monkeypatch):
+    mock_user_verification(
+        monkeypatch,
+        status_code=403,
+        body={"msg": "Session from session_id claim in JWT does not exist"},
+    )
+
+    response = client.get(
+        "/api/profile/avatar",
+        headers={"Authorization": "Bearer " + "revoked-token"},
+    )
+
+    assert response.status_code == 401
+    assert "session is no longer valid" in response.json()["detail"].lower()
 
 
 def test_missing_supabase_publishable_configuration_is_explicit(client, monkeypatch):
@@ -238,19 +256,39 @@ def test_analyze_upload_requires_supabase_access_token(client, monkeypatch):
 
 def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch):
     mock_user_verification(monkeypatch, body={"id": "owner-uuid"})
+    analyzed_items = [
+        {
+            "detection_index": 0,
+            "category": "Top",
+            "clothing_type": "short_sleeve_top",
+            "detection_confidence": 0.91,
+            "dominant_color": "Blue",
+            "secondary_color": "White",
+            "color_family": "Blue",
+            "brightness": "Medium",
+            "pattern": "striped",
+            "pattern_confidence": 0.87,
+        },
+        {
+            "detection_index": 1,
+            "category": "Bottom",
+            "clothing_type": "trousers",
+            "detection_confidence": 0.88,
+            "dominant_color": "Black",
+            "secondary_color": "Gray",
+            "color_family": "Black",
+            "brightness": "Dark",
+            "pattern": "solid",
+            "pattern_confidence": 0.94,
+        },
+    ]
     monkeypatch.setattr(
         api,
         "analyze_uploaded_image",
         lambda data: {
             "success": True,
             "message": "Clothing detected successfully.",
-            "items": [{
-                "category": "Top",
-                "clothing_type": "short_sleeve_top",
-                "dominant_color": "Blue",
-                "color_family": "Blue",
-                "pattern": "solid",
-            }],
+            "items": analyzed_items,
         },
     )
 
@@ -262,7 +300,21 @@ def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch
 
     assert response.status_code == 200
     assert response.json()["success"] is True
-    assert response.json()["items"][0]["category"] == "Top"
+    assert response.json()["items"] == analyzed_items
+
+
+def test_analyze_uploaded_image_rejects_success_without_analyzed_items(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "load_main9_module",
+        lambda: SimpleNamespace(analyze_image=lambda image_path: {"success": True, "items": []}),
+    )
+
+    with pytest.raises(api.HTTPException) as result:
+        api.analyze_uploaded_image(png_bytes())
+
+    assert result.value.status_code == 502
+    assert "no analyzed clothing items" in result.value.detail.lower()
 
 
 def test_compress_image_reencodes_to_webp_and_bounds_dimensions():
@@ -271,6 +323,23 @@ def test_compress_image_reencodes_to_webp_and_bounds_dimensions():
         assert result.format == "WEBP"
         assert result.size == (1600, 1067)
         assert not result.getexif()
+
+
+def test_analyze_uploaded_image_closes_temp_file_before_main9_reads_it(monkeypatch):
+    image_bytes = png_bytes()
+    observed = {}
+
+    def analyze_image(image_path):
+        observed["contents"] = Path(image_path).read_bytes()
+        return {"success": False, "message": "No supported clothing detected.", "items": []}
+
+    monkeypatch.setattr(api, "load_main9_module", lambda: SimpleNamespace(analyze_image=analyze_image))
+
+    with pytest.raises(api.HTTPException) as result:
+        api.analyze_uploaded_image(image_bytes)
+
+    assert result.value.status_code == 400
+    assert observed["contents"] == image_bytes
 
 
 def test_compress_image_composites_transparent_png_on_white():

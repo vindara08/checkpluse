@@ -4,8 +4,8 @@ import './wardrobe.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 const BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'wardrobe-images'
-const TERMS_VERSION = '1.0'
-const PRIVACY_VERSION = '1.0'
+const TERMS_VERSION = '1.1'
+const PRIVACY_VERSION = '1.1'
 const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories']
 const categoryOptions = categories.slice(1)
 const AI_CATEGORY_MAP = {
@@ -14,6 +14,9 @@ const AI_CATEGORY_MAP = {
   Dress: 'Dresses',
   Outerwear: 'Outerwear',
 }
+const seasonOptions = ['Spring', 'Summer', 'Monsoon', 'Autumn', 'Winter', 'All Season', 'All season']
+const formalityOptions = ['Casual / Informal', 'Smart Casual', 'Formal']
+const occasionOptions = ['Daily Wear', 'College', 'Office', 'Party', 'Travel', 'Sports', 'Wedding / Traditional', 'Other']
 const BUILT_IN_AVATARS = [
   { id: 'fern', label: 'Fern', src: '/avatars/fold-fern.svg' },
   { id: 'terracotta', label: 'Terracotta', src: '/avatars/fold-terracotta.svg' },
@@ -114,7 +117,7 @@ function ProfileSectionNav({ active, onNavigate }) {
 
 function LegalPage({ privacy = false, onBack, onPrivacy, activeSection, onSectionNavigate }) {
   return <main className={`legal-page${activeSection ? ' profile-document' : ''}`}><button className="text-button back-link" onClick={onBack}>← Back to account</button><div className="eyebrow">THE FOLD / {privacy ? 'PRIVACY' : 'TERMS'}</div>{activeSection && <ProfileSectionNav active={activeSection} onNavigate={onSectionNavigate} />}<h1>{privacy ? 'Your wardrobe stays yours.' : 'Terms & conditions'}</h1><p className="legal-intro">{privacy ? 'A plain-language notice about personal data for The Fold.' : 'A straightforward agreement for keeping your personal wardrobe in one place.'}</p>
-    {privacy ? <><section><h2>What we collect and why</h2><p>Your email, name and consent records support your account. Clothing photos and details are used to show your wardrobe and saved outfits. V0 has no advertising, analytics, precise location, or contacts collection.</p></section><section><h2>Where it is stored</h2><p>Account and wardrobe data are stored in Supabase Postgres. Compressed photos are stored in a private Supabase Storage bucket. Row-level security limits access to the signed-in account; FastAPI/Pillow only compresses an image after validating its Supabase session.</p></section><section><h2>Your choices and rights</h2><p>You can export your account data, update your name and clothing details, or delete your account. Account deletion also requests removal of your stored photos. Contact: <strong>shubhank44jha@gmail.com</strong></p></section><section><h2>Security and retention</h2><p>Supabase Auth manages passwords and sessions. Images are re-encoded to strip embedded metadata. Data is kept while your account is active and removed on account deletion, subject to technical backup retention and records required by law.</p></section><section><h2>India</h2><p>The implementation supports data minimisation, purpose limitation, safeguards, consent records, and user control. The operator must confirm current DPDP Act and Rules obligations, retention requirements, grievance contact, and any transfer practices with qualified counsel before launch.</p></section><p className="legal-footnote">Privacy notice version 1.0 · Effective 26 September 2026</p></> : <><section><h2>Using The Fold</h2><p>The Fold is a private tool for cataloguing clothing and saving outfits. You must be at least 18 years old to create an account. Keep your sign-in details confidential and tell us promptly if you suspect unauthorised access.</p></section><section><h2>Your content</h2><p>You retain ownership of photos and details you add. You allow us to store and display them only to provide the wardrobe and outfit features you request. Photos are compressed for storage; we do not use AI recognition, train models, or generate recommendations.</p></section><section><h2>Privacy and account closure</h2><p>We use account and wardrobe information only to provide the service and protect accounts. You can export your data or delete your account at any time. Deletion removes account records and associated photos. Read our <button className="inline-link" onClick={onPrivacy}>Privacy notice</button>.</p></section><section><h2>Availability and changes</h2><p>The service is provided as available and may change as this early version develops. We will give notice of material changes. You may stop using the service and delete your account at any time.</p></section><section><h2>Contact and complaints</h2><p>For support, privacy requests, or complaints, contact the operator using the address in the Privacy notice or deployment configuration. The operator should acknowledge and address complaints promptly.</p></section><p className="legal-footnote">Effective 26 September 2026 · Terms version 1.0</p><p className="legal-disclaimer">This starter text is not legal advice. Have final terms reviewed for actual operations in India.</p></>}
+    {privacy ? <><section><h2>What we collect and why</h2><p>Your email, name and consent records support your account. Clothing photos and details are used to show your wardrobe and saved outfits. When you add an item, the photo is temporarily processed by the Main 9 clothing-analysis service to suggest clothing details; analysis does not create a wardrobe record or permanently store the photo. The photo is uploaded to your private wardrobe only after you review and save. Photos are not used to train models. The service has no advertising, analytics, precise location, or contacts collection.</p></section><section><h2>Where it is stored</h2><p>Account and wardrobe data are stored in Supabase Postgres. Compressed photos are stored in a private Supabase Storage bucket. Row-level security limits access to the signed-in account; FastAPI validates your Supabase session before temporarily processing an image for analysis or compression.</p></section><section><h2>Your choices and rights</h2><p>You can export your data, update your name and clothing details, or delete your account. Account deletion also requests removal of your stored photos. Contact: <strong>shubhank44jha@gmail.com</strong></p></section><section><h2>Security and retention</h2><p>Supabase Auth manages passwords and sessions. Images are re-encoded to strip embedded metadata. Unapproved analysis files are temporary and are removed after processing. Saved data is kept while your account is active and removed on account deletion, subject to technical backup retention and records required by law.</p></section><section><h2>India</h2><p>The implementation supports data minimisation, purpose limitation, safeguards, consent records, and user control. The operator must confirm current DPDP Act and Rules obligations, retention requirements, grievance contact, and any transfer practices with qualified counsel before launch.</p></section><p className="legal-footnote">Privacy notice version 1.1 · Effective 1 October 2026</p></> : <><section><h2>Using The Fold</h2><p>The Fold is a private tool for cataloguing clothing and saving outfits. You must be at least 18 years old to create an account. Keep your sign-in details confidential and tell us promptly if you suspect unauthorised access.</p></section><section><h2>Your content</h2><p>You retain ownership of photos and details you add. You allow us to store and display them only to provide the wardrobe and outfit features you request. Main 9 temporarily analyzes clothing photos to suggest details; you review and can correct its suggestions before saving. Photos are not used to train models or generate recommendations.</p></section><section><h2>Privacy and account closure</h2><p>We use account and wardrobe information only to provide the service and protect accounts. You can export your data or delete your account at any time. Deletion removes account records and associated photos. Read our <button className="inline-link" onClick={onPrivacy}>Privacy notice</button>.</p></section><section><h2>Availability and changes</h2><p>The service is provided as available and may change as this early version develops. We will give notice of material changes. You may stop using the service and delete your account at any time.</p></section><section><h2>Contact and complaints</h2><p>For support, privacy requests, or complaints, contact the operator using the address in the Privacy notice or deployment configuration. The operator should acknowledge and address complaints promptly.</p></section><p className="legal-footnote">Effective 1 October 2026 · Terms version 1.1</p><p className="legal-disclaimer">This starter text is not legal advice. Have final terms reviewed for actual operations in India.</p></>}
   </main>
 }
 
@@ -218,7 +221,7 @@ function Auth({ onSignedIn }) {
   }
 
   if (legal) return <LegalPage privacy={legal === 'privacy'} onBack={() => setLegal('')} onPrivacy={() => setLegal('privacy')} />
-  return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> Your photos stay private. No AI, no ads, no recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
+  return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> AI clothing suggestions are reviewed by you; photos are not used to train models. No ads or recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
 }
 
 function ProfilePage({ profile, email, session, theme, onThemeChange, section = 'profile', onNavigate, onBack, onSaved, onAvatarSaved, onPrivacy, onExport, onLogout, onDelete }) {
@@ -327,14 +330,15 @@ function ProfilePage({ profile, email, session, theme, onThemeChange, section = 
 }
 
 function ClothingCard({ item, onDelete, onDragStart, onOpen }) {
+  const itemType = item.clothing_type?.replace(/_/g, ' ') || item.category
   return <article className="clothing-card" draggable onDragStart={(event) => onDragStart?.(event, item)}>
     <div className="clothing-image">
-      <button className="clothing-image-button" onClick={() => onOpen(item)} aria-label={`View ${item.subcategory || item.category}`}>
-        <img src={item.image_url} alt={`${item.category}${item.color ? `, ${item.color}` : ''}`} loading="lazy" />
+      <button className="clothing-image-button" onClick={() => onOpen(item)} aria-label={`View ${itemType}`}>
+        <img src={item.image_url} alt={`${item.category}${item.dominant_color ? `, ${item.dominant_color}` : ''}`} loading="lazy" />
       </button>
       <button className="icon-button delete-piece" title="Remove clothing" aria-label="Remove clothing" onClick={() => onDelete(item)}>×</button>
     </div>
-    <div className="clothing-details"><div><strong>{item.subcategory || item.category}</strong><span>{item.subcategory ? item.category : item.color || 'Piece'}</span></div></div>
+    <div className="clothing-details"><div><strong>{itemType}</strong><span>{item.category}{item.dominant_color ? ` · ${item.dominant_color}` : ''}</span></div></div>
   </article>
 }
 
@@ -356,9 +360,17 @@ function EmptyState({ title, description, action, onAction }) {
 
 function ClothingEditor({ item, onClose, onSaved }) {
   const [category, setCategory] = useState(item.category)
-  const [color, setColor] = useState(item.color || '')
-  const [subcategory, setSubcategory] = useState(item.subcategory || '')
+  const [clothingType, setClothingType] = useState(item.clothing_type || '')
+  const [dominantColor, setDominantColor] = useState(item.dominant_color || '')
+  const [secondaryColor, setSecondaryColor] = useState(item.secondary_color || '')
+  const [colorFamily, setColorFamily] = useState(item.color_family || '')
+  const [brightness, setBrightness] = useState(item.brightness || '')
+  const [pattern, setPattern] = useState(item.pattern || '')
+  const [patternConfidence, setPatternConfidence] = useState(item.pattern_confidence ?? '')
+  const [detectionConfidence, setDetectionConfidence] = useState(item.detection_confidence ?? '')
   const [season, setSeason] = useState(item.season || '')
+  const [formality, setFormality] = useState(item.formality || '')
+  const [occasion, setOccasion] = useState(item.occasion || '')
   const [notes, setNotes] = useState(item.notes || '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -366,7 +378,21 @@ function ClothingEditor({ item, onClose, onSaved }) {
     event.preventDefault()
     setBusy(true)
     setError('')
-    const changes = { category, color: color.trim(), subcategory: subcategory.trim(), season, notes: notes.trim() }
+    const changes = {
+      category,
+      clothing_type: clothingType.trim(),
+      dominant_color: dominantColor.trim(),
+      secondary_color: secondaryColor.trim() || null,
+      color_family: colorFamily.trim() || null,
+      brightness: brightness.trim() || null,
+      pattern: pattern.trim() || null,
+      pattern_confidence: patternConfidence === '' ? null : Number(patternConfidence),
+      detection_confidence: detectionConfidence === '' ? null : Number(detectionConfidence),
+      season,
+      formality,
+      occasion,
+      notes: notes.trim(),
+    }
     try {
       const { data, error: updateError } = await supabase.from('clothing_items').update(changes).eq('id', item.id).eq('user_id', item.user_id).select().single()
       if (updateError) throw updateError
@@ -382,9 +408,17 @@ function ClothingEditor({ item, onClose, onSaved }) {
       <div className="modal-heading"><div><span className="eyebrow">EDIT YOUR PIECE</span><h2 id="edit-clothing-title">Update details</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
       <form className="form-grid" onSubmit={save}>
         <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-        <label>Type<input value={subcategory} onChange={(event) => setSubcategory(event.target.value)} maxLength={60} /></label>
-        <label>Color<input value={color} onChange={(event) => setColor(event.target.value)} maxLength={40} /></label>
-        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option></select></label>
+        <label>Clothing type<input value={clothingType} onChange={(event) => setClothingType(event.target.value)} maxLength={60} /></label>
+        <label>Dominant color<input value={dominantColor} onChange={(event) => setDominantColor(event.target.value)} maxLength={40} /></label>
+        <label>Secondary color<input value={secondaryColor} onChange={(event) => setSecondaryColor(event.target.value)} maxLength={40} /></label>
+        <label>Color family<input value={colorFamily} onChange={(event) => setColorFamily(event.target.value)} maxLength={40} /></label>
+        <label>Brightness<input value={brightness} onChange={(event) => setBrightness(event.target.value)} maxLength={30} /></label>
+        <label>Pattern<input value={pattern} onChange={(event) => setPattern(event.target.value)} maxLength={40} /></label>
+        <label>Pattern confidence<input type="number" min="0" max="1" step="0.01" value={patternConfidence} onChange={(event) => setPatternConfidence(event.target.value)} /></label>
+        <label>Detection confidence<input type="number" min="0" max="1" step="0.01" value={detectionConfidence} onChange={(event) => setDetectionConfidence(event.target.value)} /></label>
+        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Formality<select value={formality} onChange={(event) => setFormality(event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+        <label>Occasion<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
         <label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={4} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="modal-actions wide-field"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
@@ -394,12 +428,25 @@ function ClothingEditor({ item, onClose, onSaved }) {
 }
 
 function ClothingDetails({ item, onClose, onDelete, onEdit }) {
+  const itemType = item.clothing_type?.replace(/_/g, ' ') || item.category
   return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-panel detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
       <button className="icon-button close-button detail-close" aria-label="Close item details" onClick={onClose}>×</button>
-      <img className="detail-photo" src={item.image_url} alt={`${item.subcategory || item.category}${item.color ? `, ${item.color}` : ''}`} />
-      <div className="detail-copy"><span className="eyebrow">{item.category}</span><h2 id="detail-title">{item.subcategory || item.category}</h2>
-        <dl>{item.color && <div><dt>Color</dt><dd>{item.color}</dd></div>}{item.season && <div><dt>Season</dt><dd>{item.season}</dd></div>}{item.notes && <div><dt>Notes</dt><dd>{item.notes}</dd></div>}</dl>
+      <img className="detail-photo" src={item.image_url} alt={`${itemType}${item.dominant_color ? `, ${item.dominant_color}` : ''}`} />
+      <div className="detail-copy"><span className="eyebrow">{item.category}</span><h2 id="detail-title">{itemType}</h2>
+        <dl>
+          {item.dominant_color && <div><dt>Dominant color</dt><dd>{item.dominant_color}</dd></div>}
+          {item.secondary_color && <div><dt>Secondary color</dt><dd>{item.secondary_color}</dd></div>}
+          {item.color_family && <div><dt>Color family</dt><dd>{item.color_family}</dd></div>}
+          {item.brightness && <div><dt>Brightness</dt><dd>{item.brightness}</dd></div>}
+          {item.pattern && <div><dt>Pattern</dt><dd>{item.pattern}</dd></div>}
+          {item.pattern_confidence != null && <div><dt>Pattern confidence</dt><dd>{item.pattern_confidence}</dd></div>}
+          {item.detection_confidence != null && <div><dt>Detection confidence</dt><dd>{item.detection_confidence}</dd></div>}
+          {item.season && <div><dt>Season</dt><dd>{item.season}</dd></div>}
+          {item.formality && <div><dt>Formality</dt><dd>{item.formality}</dd></div>}
+          {item.occasion && <div><dt>Occasion</dt><dd>{item.occasion}</dd></div>}
+          {item.notes && <div><dt>Notes</dt><dd>{item.notes}</dd></div>}
+        </dl>
         <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-outline" onClick={() => onEdit(item)}>Edit</button><button className="button button-danger" onClick={() => { onClose(); onDelete(item) }}>Remove item</button></div>
       </div>
     </section>
@@ -410,7 +457,7 @@ function OutfitDetails({ outfit, onClose, onEdit }) {
   return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-panel outfit-detail-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-detail-title">
       <div className="modal-heading"><div><span className="eyebrow">YOUR COMBINATION</span><h2 id="outfit-detail-title">{outfit.name}</h2></div><button className="icon-button close-button" aria-label="Close outfit details" onClick={onClose}>×</button></div>
-      <div className="outfit-detail-grid">{outfit.items.map((item) => <figure key={item.id}><img src={item.image_url} alt={item.subcategory || item.category} /><figcaption>{item.subcategory || item.category}</figcaption></figure>)}</div>
+      <div className="outfit-detail-grid">{outfit.items.map((item) => <figure key={item.id}><img src={item.image_url} alt={item.clothing_type || item.category} /><figcaption>{item.clothing_type?.replace(/_/g, ' ') || item.category}</figcaption></figure>)}</div>
       <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Close</button><button className="button button-primary" onClick={() => onEdit(outfit)}>Edit</button></div>
     </section>
   </div>
@@ -450,11 +497,7 @@ function SecondaryMenu({ open, onToggle, onNavigate, onExport, onLogout }) {
 function AddClothing({ session, userId, onClose, onSaved }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState('')
-  const [category, setCategory] = useState('Tops')
-  const [color, setColor] = useState('')
-  const [subcategory, setSubcategory] = useState('')
-  const [season, setSeason] = useState('')
-  const [notes, setNotes] = useState('')
+  const [items, setItems] = useState([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [step, setStep] = useState(0)
@@ -485,11 +528,7 @@ function AddClothing({ session, userId, onClose, onSaved }) {
     if (preview) URL.revokeObjectURL(preview)
     setFile(next)
     setPreview(URL.createObjectURL(next))
-    setCategory('Tops')
-    setColor('')
-    setSubcategory('')
-    setSeason('')
-    setNotes('')
+    setItems([])
     setError('')
   }
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
@@ -507,16 +546,31 @@ function AddClothing({ session, userId, onClose, onSaved }) {
     if (!response.ok) {
       throw new Error(payload.detail || payload.message || 'Could not analyze this image.')
     }
-    const candidate = payload.items?.[0]
-    if (!payload.success || !candidate) {
+    if (!payload.success || !Array.isArray(payload.items) || !payload.items.length) {
       throw new Error(payload.message || 'No supported clothing was detected in that image.')
     }
-    const mappedCategory = AI_CATEGORY_MAP[candidate.category] || categoryOptions[0]
-    setCategory(mappedCategory)
-    setSubcategory(String(candidate.clothing_type || candidate.category || '').replace(/_/g, ' '))
-    setColor(candidate.dominant_color || candidate.color_family || '')
-    setNotes((existing) => existing || `AI suggestion: ${candidate.pattern || 'solid'} pattern • ${candidate.dominant_color || candidate.color_family || 'uncertain'} color`)
-    return payload
+    const analyzedItems = payload.items.map((candidate) => ({
+      detection_index: candidate.detection_index ?? null,
+      category: AI_CATEGORY_MAP[candidate.category] || categoryOptions[0],
+      clothing_type: String(candidate.clothing_type || ''),
+      dominant_color: String(candidate.dominant_color || ''),
+      secondary_color: String(candidate.secondary_color || ''),
+      color_family: String(candidate.color_family || ''),
+      brightness: String(candidate.brightness || ''),
+      pattern: String(candidate.pattern || ''),
+      pattern_confidence: candidate.pattern_confidence ?? '',
+      detection_confidence: candidate.detection_confidence ?? '',
+      season: '',
+      formality: '',
+      occasion: '',
+      notes: '',
+    }))
+    console.debug(`[Main 9] Frontend received ${analyzedItems.length} analyzed items.`)
+    return analyzedItems
+  }
+
+  function updateItem(index, field, value) {
+    setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item))
   }
 
   async function submit(event) {
@@ -526,7 +580,9 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       setBusy(true)
       setError('')
       try {
-        await analyzeSelectedImage(file)
+        const analyzedItems = await analyzeSelectedImage(file)
+        setItems(analyzedItems)
+        console.debug(`[Main 9] Frontend rendering ${analyzedItems.length} editable items.`)
         setStep(1)
       } catch (err) {
         setError(err.message || 'Could not analyze this photo.')
@@ -536,27 +592,56 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       return
     }
     if (step === 1) {
+      if (!items.length) { setError('Keep at least one detected clothing item to continue.'); return }
       setError('')
       setStep(2)
       return
     }
-    if (!file) { setStep(0); setError('Choose a photo to continue.'); return }
+    if (!file || !items.length) { setStep(0); setError('Choose a photo and review at least one clothing item.'); return }
     setBusy(true)
     setError('')
-    const imagePath = `${userId}/${createObjectId()}.webp`
+    const imagePaths = items.map(() => `${userId}/${createObjectId()}.webp`)
     try {
       const compressed = await compressPhoto(file, session)
-      const { error: uploadError } = await supabase.storage.from(BUCKET).upload(imagePath, compressed, { contentType: 'image/webp', cacheControl: '3600', upsert: false })
-      if (uploadError) {
-        if (uploadError.message.toLowerCase().includes('mime type image/webp is not supported')) {
+      const uploads = await Promise.allSettled(items.map(async (item, index) => {
+        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(imagePaths[index], compressed, { contentType: 'image/webp', cacheControl: '3600', upsert: false })
+        if (uploadError) throw uploadError
+      }))
+      const failedUpload = uploads.find((result) => result.status === 'rejected')
+      if (failedUpload) {
+        const { error: cleanupError } = await supabase.storage.from(BUCKET).remove(imagePaths)
+        const uploadError = failedUpload.reason instanceof Error
+          ? failedUpload.reason
+          : new Error(String(failedUpload.reason))
+        if (cleanupError) throw new Error(`No wardrobe items were saved, but some uploaded photos could not be cleaned up: ${cleanupError.message}`)
+        if (uploadError.message?.toLowerCase().includes('mime type image/webp is not supported')) {
           throw new Error(`The ${BUCKET} bucket must allow image/webp uploads. In Supabase Storage, edit the bucket's allowed MIME types to include image/webp, then retry.`)
         }
         throw uploadError
       }
-      const { error: insertError } = await supabase.from('clothing_items').insert({ user_id: userId, image_path: imagePath, category, color: color.trim(), subcategory: subcategory.trim(), season, notes: notes.trim() })
+
+      const records = items.map((item, index) => ({
+        user_id: userId,
+        image_path: imagePaths[index],
+        category: item.category,
+        clothing_type: item.clothing_type.trim(),
+        dominant_color: item.dominant_color.trim(),
+        secondary_color: item.secondary_color.trim() || null,
+        color_family: item.color_family.trim() || null,
+        brightness: item.brightness.trim() || null,
+        pattern: item.pattern.trim() || null,
+        pattern_confidence: item.pattern_confidence === '' ? null : Number(item.pattern_confidence),
+        detection_confidence: item.detection_confidence === '' ? null : Number(item.detection_confidence),
+        season: item.season,
+        formality: item.formality,
+        occasion: item.occasion,
+        notes: item.notes.trim(),
+      }))
+      console.debug(`[Main 9] Saving ${records.length} user-reviewed clothing items.`)
+      const { error: insertError } = await supabase.from('clothing_items').insert(records)
       if (insertError) {
-        const { error: cleanupError } = await supabase.storage.from(BUCKET).remove([imagePath])
-        if (cleanupError) throw new Error(`Clothing details were not saved and the uploaded photo could not be cleaned up: ${cleanupError.message}`)
+        const { error: cleanupError } = await supabase.storage.from(BUCKET).remove(imagePaths)
+        if (cleanupError) throw new Error(`No wardrobe items were saved, but the uploaded photos could not be cleaned up: ${cleanupError.message}`)
         throw insertError
       }
       await onSaved()
@@ -566,30 +651,52 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       setBusy(false)
     }
   }
+  const stepTitles = ['Start with a photo', 'Review detected items', 'Confirm your pieces']
   return <div className="modal-scrim add-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel add-panel" data-step={step} role="dialog" aria-modal="true" aria-labelledby="add-title">
-    <div className="modal-heading"><div><div className="eyebrow">ADD TO YOUR WARDROBE · {String(step + 1).padStart(2, '0')} / 03</div><h2 id="add-title">{['Start with a photo', 'Add Details', 'Review your piece'][step]}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
+    <div className="modal-heading"><div><div className="eyebrow">ADD TO YOUR WARDROBE · {String(step + 1).padStart(2, '0')} / 03</div><h2 id="add-title">{stepTitles[step]}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div>
     <div className="step-track" aria-label={`Step ${step + 1} of 3`}><span className={step >= 0 ? 'complete' : ''} /><span className={step >= 1 ? 'complete' : ''} /><span className={step >= 2 ? 'complete' : ''} /></div>
     <form onSubmit={submit} onFocus={(event) => { if (step === 1) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}>
       {step === 0 && <div className="add-step">
         <label className={`upload-zone${preview ? ' has-preview' : ''}`}>{preview ? <><img src={preview} alt="Selected clothing preview" /><span className="upload-change">Choose a different photo</span></> : <><span className="upload-icon">＋</span><strong>Choose a photo or take one</strong><span>JPG, PNG or WebP · up to 8 MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} /></label>
         <p className="form-helper">A clear photo makes your digital closet easier to browse.</p>
       </div>}
-      {step === 1 && <div className="form-grid add-step">
-        {preview && <img className="form-preview" src={preview} alt="Clothing preview" />}
-        <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-        <label>Type<input value={subcategory} onChange={(event) => setSubcategory(event.target.value)} maxLength={60} placeholder="e.g. linen shirt" /></label>
-        <label>Color<input value={color} onChange={(event) => setColor(event.target.value)} maxLength={40} placeholder="e.g. forest green" /></label>
-        <label>Season<select value={season} onChange={(event) => setSeason(event.target.value)}><option value="">Any season</option><option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option></select></label>
-        <label className="wide-field">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} rows={3} placeholder="Anything you want to remember" /></label>
+      {step === 1 && <div className="add-step add-review-list">
+        <p className="form-helper">Main 9 found {items.length} clothing {items.length === 1 ? 'item' : 'items'}. Review and correct each suggestion before saving.</p>
+        {preview && <img className="form-preview" src={preview} alt="Photo analyzed by Main 9" />}
+        {items.map((item, index) => <fieldset className="detected-item" key={`${item.detection_index ?? 'item'}-${index}`}>
+          <legend>ITEM {index + 1} OF {items.length}</legend>
+          <div className="form-grid">
+            <label>Category<select value={item.category} onChange={(event) => updateItem(index, 'category', event.target.value)}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Clothing type<input value={item.clothing_type} onChange={(event) => updateItem(index, 'clothing_type', event.target.value)} maxLength={60} required /></label>
+            <label>Dominant color<input value={item.dominant_color} onChange={(event) => updateItem(index, 'dominant_color', event.target.value)} maxLength={40} /></label>
+            <label>Secondary color<input value={item.secondary_color} onChange={(event) => updateItem(index, 'secondary_color', event.target.value)} maxLength={40} /></label>
+            <label>Color family<input value={item.color_family} onChange={(event) => updateItem(index, 'color_family', event.target.value)} maxLength={40} /></label>
+            <label>Brightness<input value={item.brightness} onChange={(event) => updateItem(index, 'brightness', event.target.value)} maxLength={30} /></label>
+            <label>Pattern<input value={item.pattern} onChange={(event) => updateItem(index, 'pattern', event.target.value)} maxLength={40} /></label>
+            <label>Pattern confidence<input type="number" min="0" max="1" step="0.01" value={item.pattern_confidence} onChange={(event) => updateItem(index, 'pattern_confidence', event.target.value)} /></label>
+            <label>Detection confidence<input type="number" min="0" max="1" step="0.01" value={item.detection_confidence} onChange={(event) => updateItem(index, 'detection_confidence', event.target.value)} /></label>
+            <label>Season<select value={item.season} onChange={(event) => updateItem(index, 'season', event.target.value)}><option value="">Choose season</option>{seasonOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Formality<select value={item.formality} onChange={(event) => updateItem(index, 'formality', event.target.value)}><option value="">Choose formality</option>{formalityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Occasion<select value={item.occasion} onChange={(event) => updateItem(index, 'occasion', event.target.value)}><option value="">Choose occasion</option>{occasionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label className="wide-field">Notes<textarea value={item.notes} onChange={(event) => updateItem(index, 'notes', event.target.value)} maxLength={500} rows={3} placeholder="Anything you want to remember" /></label>
+          </div>
+        </fieldset>)}
       </div>}
-      {step === 2 && <section className="add-review">
-        {preview && <img src={preview} alt="Clothing review" />}
-        <div><span className="eyebrow">READY TO SAVE</span><h3>{subcategory.trim() || category}</h3><p>{[category, color.trim(), season || 'Any season'].filter(Boolean).join(' · ')}</p>{notes.trim() && <p>{notes.trim()}</p>}</div>
+      {step === 2 && <section className="add-review-list">
+        {preview && <img className="form-preview" src={preview} alt="Photo to save with the reviewed items" />}
+        <span className="eyebrow">READY TO SAVE {items.length} {items.length === 1 ? 'PIECE' : 'PIECES'}</span>
+        {items.map((item, index) => <article className="reviewed-item" key={`${item.detection_index ?? 'item'}-${index}`}>
+          <h3>{item.clothing_type.replace(/_/g, ' ')}</h3>
+          <p>{[item.category, item.dominant_color, item.secondary_color, item.color_family, item.brightness, item.pattern, item.season, item.formality, item.occasion].filter(Boolean).join(' · ')}</p>
+          {item.notes.trim() && <p>{item.notes}</p>}
+          <small>Pattern confidence: {item.pattern_confidence === '' ? 'not provided' : item.pattern_confidence} · Detection confidence: {item.detection_confidence === '' ? 'not provided' : item.detection_confidence}</small>
+        </article>)}
+        <p className="form-helper">Nothing is uploaded to your wardrobe or added to the database until you save.</p>
       </section>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="modal-actions add-actions">
         <button type="button" className="button button-quiet" onClick={step ? () => setStep(step - 1) : onClose}>{step ? 'Back' : 'Cancel'}</button>
-        <button className="button button-primary" disabled={busy}>{busy ? 'Analyzing photo…' : step === 2 ? 'Save to wardrobe' : 'Continue'}</button>
+        <button className="button button-primary" disabled={busy || (step === 1 && !items.length)}>{busy ? step === 0 ? 'Analyzing clothing…' : 'Saving pieces…' : step === 2 ? 'Save all to wardrobe' : step === 0 ? 'Analyze photo' : 'Review and continue'}</button>
       </div>
     </form>
   </section></div>
@@ -629,7 +736,7 @@ function OutfitBuilder({ clothes, userId, outfit, onClose, onSaved }) {
       await onSaved()
     } catch (err) { setError(err.message || 'Could not save the outfit.') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel outfit-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-title"><div className="modal-heading"><div><div className="eyebrow">OUTFIT BUILDER</div><h2 id="outfit-title">Put a look together</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><label className="outfit-name">Outfit name<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label><div className="builder-layout"><div className="builder-pieces"><div className="builder-label">YOUR PIECES <span>TAP OR DRAG TO CANVAS</span></div><div className="builder-piece-list">{clothes.map((item) => <button key={item.id} className="builder-piece" draggable onClick={() => addItem(item.id)} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(item.id))}><img src={item.image_url} alt="" /><span>{item.category}<small>{item.color || item.subcategory || 'Piece'}</small></span></button>)}</div></div><div className="outfit-canvas" onDragOver={(event) => event.preventDefault()} onDrop={drop}><span className="canvas-label">CANVAS <span>{selected.length} PIECES</span></span>{selected.length ? <div className="canvas-items">{selected.map((item) => <div className="canvas-piece" key={item.id}><img src={item.image_url} alt={item.category} /><button className="icon-button" title="Remove from outfit" aria-label="Remove from outfit" onClick={() => setSelected((current) => current.filter((piece) => piece.id !== item.id))}>×</button><small>{item.category}</small></div>)}</div> : <div className="canvas-empty"><span>＋</span><strong>Drop a piece here</strong><small>Start with something you love.</small></div>}</div></div>{error && <p className="form-error" role="alert">{error}</p>}  <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={!selected.length || !name.trim() || busy} onClick={save}>{busy ? 'Saving…' : 'Save outfit'}</button></div></section></div>
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel outfit-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-title"><div className="modal-heading"><div><div className="eyebrow">OUTFIT BUILDER</div><h2 id="outfit-title">Put a look together</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><label className="outfit-name">Outfit name<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label><div className="builder-layout"><div className="builder-pieces"><div className="builder-label">YOUR PIECES <span>TAP OR DRAG TO CANVAS</span></div><div className="builder-piece-list">{clothes.map((item) => <button key={item.id} className="builder-piece" draggable onClick={() => addItem(item.id)} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(item.id))}><img src={item.image_url} alt="" /><span>{item.category}<small>{item.dominant_color || item.clothing_type?.replace(/_/g, ' ') || 'Piece'}</small></span></button>)}</div></div><div className="outfit-canvas" onDragOver={(event) => event.preventDefault()} onDrop={drop}><span className="canvas-label">CANVAS <span>{selected.length} PIECES</span></span>{selected.length ? <div className="canvas-items">{selected.map((item) => <div className="canvas-piece" key={item.id}><img src={item.image_url} alt={item.category} /><button className="icon-button" title="Remove from outfit" aria-label="Remove from outfit" onClick={() => setSelected((current) => current.filter((piece) => piece.id !== item.id))}>×</button><small>{item.category}</small></div>)}</div> : <div className="canvas-empty"><span>＋</span><strong>Drop a piece here</strong><small>Start with something you love.</small></div>}</div></div>{error && <p className="form-error" role="alert">{error}</p>}  <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={!selected.length || !name.trim() || busy} onClick={save}>{busy ? 'Saving…' : 'Save outfit'}</button></div></section></div>
 }
 
 export default function WardrobeApp() {
@@ -864,7 +971,7 @@ export default function WardrobeApp() {
   async function exportData() {
     try {
       const [items, savedOutfits, links, consent] = await Promise.all([
-        supabase.from('clothing_items').select('id,category,color,subcategory,season,notes,created_at').eq('user_id', userId),
+        supabase.from('clothing_items').select('id,category,clothing_type,dominant_color,secondary_color,color_family,brightness,pattern,pattern_confidence,detection_confidence,season,formality,occasion,notes,image_path,created_at,updated_at').eq('user_id', userId),
         supabase.from('outfits').select('id,name,created_at').eq('user_id', userId),
         supabase.from('outfit_items').select('outfit_id,clothing_id,position'),
         supabase.from('consent_records').select('consent_type,version,accepted_at').eq('user_id', userId),
@@ -877,8 +984,11 @@ export default function WardrobeApp() {
       const link = document.createElement('a')
       link.href = url
       link.download = 'the-fold-data.json'
+      link.style.display = 'none'
+      document.body.append(link)
       link.click()
-      URL.revokeObjectURL(url)
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (error) { setNotice(error.message) }
   }
 
@@ -974,7 +1084,7 @@ export default function WardrobeApp() {
 
   if (view !== 'legacy') {
     const visible = clothes.filter((item) => (filter === 'All' || item.category === filter) &&
-      `${item.category} ${item.subcategory || ''} ${item.color || ''} ${item.season || ''} ${item.notes || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+      `${item.category} ${item.clothing_type || ''} ${item.dominant_color || ''} ${item.secondary_color || ''} ${item.color_family || ''} ${item.brightness || ''} ${item.pattern || ''} ${item.season || ''} ${item.formality || ''} ${item.occasion || ''} ${item.notes || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
     const navigate = (nextView) => {
       if (nextView === 'profile') setPage('profile')
       else { setPage('app'); setView(nextView) }
@@ -1010,9 +1120,18 @@ export default function WardrobeApp() {
           {outfits.length ? <div className="saved-outfit-grid">{outfits.map((outfit) => <button className="saved-outfit" key={outfit.id} onClick={() => setSelectedOutfit(outfit)}><div className="saved-outfit-images">{outfit.items.slice(0, 3).map((item) => <img key={item.id} src={item.image_url} alt="" />)}</div><div className="saved-outfit-caption"><strong>{outfit.name}</strong><span>{outfit.items.length} {outfit.items.length === 1 ? 'piece' : 'pieces'} <Icon name="arrow" /></span></div></button>)}</div> : <EmptyState title="No outfits saved yet." description="Combine pieces from your wardrobe and save a look to return to." action={clothes.length ? 'Build an outfit' : 'Add a piece first'} onAction={() => clothes.length ? setModal('outfit') : setModal('add')} />}
         </section>}
       </main>
-      <footer className="workspace-footer"><span>YOUR PHOTOS ARE PRIVATE · NO AI · NO ADS</span><button className="text-button" onClick={() => setPage('privacy')}>Privacy &amp; data</button></footer>
+      <footer className="workspace-footer"><span>YOUR PHOTOS ARE PRIVATE · AI SUGGESTIONS REVIEWED BY YOU · NO ADS</span><button className="text-button" onClick={() => setPage('privacy')}>Privacy &amp; data</button></footer>
       <BottomNav view={view} page={page} onNavigate={navigate} onAdd={() => setModal('add')} />
-      {modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setFilter('All'); setView('wardrobe') }} />}
+      {modal === 'add' && <AddClothing session={session} userId={userId} onClose={() => setModal('')} onSaved={async () => {
+        setModal('')
+        setFilter('All')
+        setView('wardrobe')
+        try {
+          await refresh()
+        } catch (error) {
+          setNotice(`Your clothing items were saved, but the wardrobe could not refresh: ${error.message}`)
+        }
+      }} />}
       {modal === 'outfit' && <OutfitBuilder clothes={clothes} userId={userId} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setView('outfits') }} />}
       {modal === 'edit-outfit' && selectedOutfit && <OutfitBuilder clothes={clothes} userId={userId} outfit={selectedOutfit} onClose={() => setModal('')} onSaved={async () => { await refresh(); setModal(''); setSelectedOutfit(null); setView('outfits') }} />}
       {selectedItem && <ClothingDetails item={selectedItem} onClose={() => setSelectedItem(null)} onDelete={removeClothing} onEdit={(item) => { setSelectedItem(null); setEditingItem(item) }} />}
@@ -1022,5 +1141,5 @@ export default function WardrobeApp() {
   }
 
   const visible = filter === 'All' ? clothes : clothes.filter((item) => item.category === filter)
-  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel outfit-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-title"><div className="modal-heading"><div><div className="eyebrow">OUTFIT BUILDER</div><h2 id="outfit-title">{outfit ? 'Edit your outfit' : 'Put a look together'}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><label className="outfit-name">Outfit name<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label><div className="builder-layout"><div className="builder-pieces"><div className="builder-label">YOUR PIECES <span>TAP OR DRAG TO CANVAS</span></div><div className="builder-piece-list">{clothes.map((item) => <button key={item.id} className="builder-piece" draggable onClick={() => addItem(item.id)} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(item.id))}><img src={item.image_url} alt="" /><span>{item.category}<small>{item.color || item.subcategory || 'Piece'}</small></span></button>)}</div></div><div className="outfit-canvas" onDragOver={(event) => event.preventDefault()} onDrop={drop}><span className="canvas-label">CANVAS <span>{selected.length} PIECES</span></span>{selected.length ? <div className="canvas-items">{selected.map((item) => <div className="canvas-piece" key={item.id}><img src={item.image_url} alt={item.category} /><button className="icon-button" title="Remove from outfit" aria-label="Remove from outfit" onClick={() => setSelected((current) => current.filter((piece) => piece.id !== item.id))}>×</button><small>{item.category}</small></div>)}</div> : <div className="canvas-empty"><span>＋</span><strong>Drop a piece here</strong><small>Start with something you love.</small></div>}</div></div>{error && <p className="form-error" role="alert">{error}</p>}  <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy || !selected.length}>{busy ? 'Saving…' : outfit ? 'Save changes' : 'Save outfit'}</button></div></section></div>
+  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="modal-panel outfit-panel" role="dialog" aria-modal="true" aria-labelledby="outfit-title"><div className="modal-heading"><div><div className="eyebrow">OUTFIT BUILDER</div><h2 id="outfit-title">{outfit ? 'Edit your outfit' : 'Put a look together'}</h2></div><button className="icon-button close-button" aria-label="Close" onClick={onClose}>×</button></div><label className="outfit-name">Outfit name<input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} /></label><div className="builder-layout"><div className="builder-pieces"><div className="builder-label">YOUR PIECES <span>TAP OR DRAG TO CANVAS</span></div><div className="builder-piece-list">{clothes.map((item) => <button key={item.id} className="builder-piece" draggable onClick={() => addItem(item.id)} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(item.id))}><img src={item.image_url} alt="" /><span>{item.category}<small>{item.dominant_color || item.clothing_type || 'Piece'}</small></span></button>)}</div></div><div className="outfit-canvas" onDragOver={(event) => event.preventDefault()} onDrop={drop}><span className="canvas-label">CANVAS <span>{selected.length} PIECES</span></span>{selected.length ? <div className="canvas-items">{selected.map((item) => <div className="canvas-piece" key={item.id}><img src={item.image_url} alt={item.category} /><button className="icon-button" title="Remove from outfit" aria-label="Remove from outfit" onClick={() => setSelected((current) => current.filter((piece) => piece.id !== item.id))}>×</button><small>{item.category}</small></div>)}</div> : <div className="canvas-empty"><span>＋</span><strong>Drop a piece here</strong><small>Start with something you love.</small></div>}</div></div>{error && <p className="form-error" role="alert">{error}</p>}  <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy || !selected.length}>{busy ? 'Saving…' : outfit ? 'Save changes' : 'Save outfit'}</button></div></section></div>
 }

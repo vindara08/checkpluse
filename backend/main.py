@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import warnings
+from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal, NamedTuple, get_args
 
@@ -47,7 +48,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def limit_photo_request_size(request: Request, call_next):
-    if request.url.path == "/api/images/compress":
+    if request.url.path in {"/api/images/compress", "/api/images/analyze"}:
         content_length = request.headers.get("content-length")
         if content_length:
             try:
@@ -110,7 +111,19 @@ def authenticated_user(
 
     if result.status_code == 401:
         raise HTTPException(status_code=401, detail="Your session expired. Sign in again.")
+    if result.status_code == 403:
+        try:
+            response_body = result.json()
+        except (ValueError, TypeError):
+            response_body = {}
+        message = response_body.get("msg") or response_body.get("message")
+        if isinstance(message, str) and "session_id claim" in message:
+            raise HTTPException(
+                status_code=401,
+                detail="Your sign-in session is no longer valid. Sign in again.",
+            )
     if result.status_code != 200:
+        logger.warning("Supabase session verification failed with status %s", result.status_code)
         raise HTTPException(status_code=502, detail="Supabase could not verify your session.")
     try:
         user_id = result.json()["id"]
@@ -239,6 +252,7 @@ def compress_image(data: bytes) -> bytes:
         raise HTTPException(status_code=415, detail="That file is not a supported image.") from exc
 
 
+@lru_cache(maxsize=1)
 def load_main9_module():
     root = Path(__file__).resolve().parents[1]
     module_path = root / "main9.py"
@@ -259,6 +273,7 @@ def analyze_uploaded_image(data: bytes) -> dict[str, Any]:
     try:
         module = load_main9_module()
     except Exception as exc:  # pragma: no cover - depends on local AI runtime
+        logger.exception("Could not initialize Main 9")
         raise HTTPException(
             status_code=503,
             detail="Main 9 AI is not available in this environment. Please configure the model and try again.",
@@ -270,15 +285,30 @@ def analyze_uploaded_image(data: bytes) -> dict[str, Any]:
     elif data[:4] == b"RIFF":
         suffix = ".webp"
 
-    with tempfile.NamedTemporaryFile(suffix=suffix) as image_file:
-        image_file.write(data)
-        image_file.flush()
-        result = module.analyze_image(image_file.name)
+    with tempfile.TemporaryDirectory(prefix="the-fold-ai-") as temp_dir:
+        image_path = Path(temp_dir) / f"upload{suffix}"
+        image_path.write_bytes(data)
+        try:
+            result = module.analyze_image(str(image_path))
+        except Exception as exc:  # pragma: no cover - model runtime failures
+            logger.exception("Main 9 failed to analyze an uploaded image")
+            raise HTTPException(
+                status_code=502,
+                detail="Main 9 could not analyze this image. Please try another clear clothing photo.",
+            ) from exc
 
     if not isinstance(result, dict):
         raise HTTPException(status_code=502, detail="Main 9 returned an invalid analysis result.")
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message") or "No supported clothing was detected in that image.")
+    items = result.get("items")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=502, detail="Main 9 returned no analyzed clothing items.")
+    logger.info(
+        "Main 9 returning %s analyzed clothing items: %s",
+        len(items),
+        ", ".join(str(item.get("clothing_type", "unknown")) for item in items if isinstance(item, dict)),
+    )
     return result
 
 

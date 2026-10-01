@@ -1,6 +1,8 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageTk
+import logging
+from pathlib import Path
+from typing import Any
+
+from PIL import Image
 
 from ultralytics import YOLO
 import cv2
@@ -8,12 +10,30 @@ import numpy as np
 from sklearn.cluster import KMeans
 import colorsys
 
+logger = logging.getLogger(__name__)
+
+tk: Any
+filedialog: Any
+messagebox: Any
+ttk: Any
+ImageTk: Any
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+    from PIL import ImageTk
+except ModuleNotFoundError as exc:
+    if exc.name not in {"tkinter", "_tkinter"}:
+        raise
+    tk = filedialog = messagebox = ttk = ImageTk = None
+    GUI_IMPORT_ERROR = exc
+else:
+    GUI_IMPORT_ERROR = None
 
 # ============================================================
 # MODEL
 # ============================================================
 
-model = YOLO("best.pt")
+model = YOLO(str(Path(__file__).resolve().with_name("best.pt")))
 
 
 # ============================================================
@@ -514,7 +534,19 @@ def analyze_image(image_path):
         agnostic_nms=True
     )
 
+    if not results:
+        return {
+            "success": False,
+            "message": (
+                "No supported clothing detected.\n\n"
+                "Please upload a clear image of clothing."
+            ),
+            "items": []
+        }
+
     result = results[0]
+    raw_detection_count = len(result.boxes) if result.boxes is not None else 0
+    logger.info("Main 9 raw detections: %s", raw_detection_count)
 
     # ========================================================
     # CHECK CLOTHING DETECTION
@@ -542,6 +574,7 @@ def analyze_image(image_path):
     valid_detections = remove_duplicate_detections(
         result
     )
+    logger.info("Main 9 detections after duplicate filtering: %s", len(valid_detections))
 
     if len(valid_detections) == 0:
 
@@ -757,6 +790,8 @@ def analyze_image(image_path):
 
         item = {
 
+            "detection_index": i,
+
             "clothing_type": class_name,
 
             "category": category,
@@ -790,6 +825,12 @@ def analyze_image(image_path):
         }
 
         items.append(item)
+
+    logger.info(
+        "Main 9 processed %s of %s duplicate-filtered clothing detections",
+        len(items),
+        len(valid_detections),
+    )
 
     # ========================================================
     # FINAL RESULT
@@ -1502,6 +1543,9 @@ class ClothingAnalyzerApp:
 # ============================================================
 
 if __name__ == "__main__":
+
+    if GUI_IMPORT_ERROR is not None:
+        raise RuntimeError("Tkinter is required only to launch Main 9's desktop GUI.") from GUI_IMPORT_ERROR
 
     root = tk.Tk()
 

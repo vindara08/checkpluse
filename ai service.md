@@ -5,8 +5,8 @@
 **Project:** Check Plus — Digital Wardrobe
 **Document type:** AI architecture, technology stack, workflow, models, data structures, security and development plan
 **Version:** 1.0
-**Status:** Planning / AI Engine development
-**Primary goal:** Convert a user's clothing image into reliable, structured wardrobe data with minimum manual input.
+**Status:** Main 9 analysis is integrated into the existing wardrobe upload flow; model and live-account behavior should be validated before deployment.
+**Primary goal:** Suggest structured clothing attributes for every distinct supported garment in a photo, then let the user verify or correct each item before it is saved.
 
 ---
 
@@ -19,29 +19,16 @@ The AI system should solve the biggest problem in the current Check Plus workflo
 The target transformation is:
 
 ```text
-Current:
-
-Take photo
-→ Upload
-→ Manually identify clothing
-→ Manually enter category
-→ Manually enter type
-→ Manually identify colours
-→ Manually enter pattern
-→ Save
-
-
-Target:
+Integrated workflow:
 
 Take/upload photo
-→ AI checks image
-→ AI detects clothing
-→ AI isolates clothing
-→ AI extracts attributes
-→ AI calculates colours
-→ AI produces structured data
-→ User verifies/edits
-→ Save
+→ Temporary Main 9 analysis
+→ Existing duplicate filtering
+→ Reject unsupported image or return every analyzed detection
+→ User reviews/edits each item's AI attributes and provides context
+→ User confirms Save
+→ Compress and upload photo to private Supabase Storage
+→ Insert one user-approved wardrobe row per detected item in Supabase
 ```
 
 The AI should therefore function as an **assistant**, not as an uncontrolled automatic database writer.
@@ -50,86 +37,31 @@ The AI should therefore function as an **assistant**, not as an uncontrolled aut
 
 # 2. High-Level Architecture
 
-The existing production application remains separate.
+Main 9 now runs inside the existing FastAPI backend. It analyzes a temporary image and returns provisional data; it does not write to Storage or Postgres.
 
 ```text
-                    CHECK PLUS
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
- Production Application          AI Engine
-        │                             │
- Frontend                       Image Input
-        │                             │
- Existing FastAPI              Quality Check
-        │                             │
- Supabase                       Clothing Detection
-        │                             │
- Wardrobe                       Segmentation
-                                      │
-                                 Attribute AI
-                                      │
-                                 Color Analysis
-                                      │
-                                 Validation
-                                      │
-                              Structured JSON
-                                      │
-                              Human Verification
-                                      │
-                               Approved Result
-```
-
-Initially:
-
-```text
-Check Plus Production Backend
-        X
-        X   ← NO DIRECT INTEGRATION YET
-        X
-
-Separate AI Engine
-```
-
-Once the AI engine is reliable:
-
-```text
-Check Plus Backend
-       │
-       │ HTTP request
+React add-item form
+       │ image + Supabase session
        ▼
-AI Engine
+Existing FastAPI /api/images/analyze
        │
        ▼
-Structured JSON
-       │
+Main 9 (best.pt, detection, segmentation, attributes)
+       │ provisional JSON
        ▼
-Check Plus Backend
-       │
-       ▼
-Supabase
+React form (user reviews and edits)
+       │ final Save only
+       ├────────► FastAPI /api/images/compress ─────► Supabase Storage
+       └───────────────────────────────────────────► Supabase clothing_items
 ```
 
 ---
 
-# 3. Why We Are Building the AI Engine Separately
+# 3. Integration and Runtime
 
-The existing Check Plus backend already works.
+Main 9 began as a separate prototype. Its existing analysis function, segmentation, duplicate filtering, model weights, color extraction, pattern analysis, and class mapping are called by the existing wardrobe backend; run the one FastAPI service rather than starting a second AI API. Install the AI packages from `requirements.txt`, keep `best.pt` alongside `main9.py`, and ensure inference runs from a temporary file that is closed to other processes on Windows before analysis starts. The API returns all analyzed detections from the single uploaded image; the frontend never treats one image as one item.
 
-Changing it while experimenting with computer vision would create unnecessary risk.
-
-The AI system will therefore initially have:
-
-- its own Git repository
-- its own Python environment
-- its own FastAPI service
-- its own test images
-- its own JSON outputs
-- its own logs
-- its own experiments
-- local/temporary storage during development
-
-Only after the extraction pipeline becomes reliable will it be connected to Check Plus.
+The shipped model uses `imgsz=416`, `conf=0.5`, and `agnostic_nms=True`. It does not detect shoes or infer fabric, brands, prices, or sizes. Analysis is provisional and has no Supabase write access. Permanent image uploads and database inserts happen only after the user confirms the reviewed list.
 
 ---
 

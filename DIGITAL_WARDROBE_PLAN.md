@@ -1,14 +1,13 @@
 # The Fold — Digital Wardrobe V0 Plan
 
-Last updated: 26 September 2026
+Last updated: 2 October 2026
 
 ## Product goal
 
-Build a private personal wardrobe catalogue. A user can create an account, add clothing with a photo and manually entered details, filter pieces by category, and save outfits made from their own pieces.
+Build a private personal wardrobe catalogue. A user can create an account, add clothing with a photo, review and edit AI-suggested attributes alongside manual details, filter pieces by category, and save outfits made from their own pieces.
 
 ### Out of scope
 
-- AI or automated clothing recognition
 - Outfit recommendations or other recommendation algorithms
 - Public image access, ads, or analytics
 - Unnecessary frameworks or unrelated features
@@ -22,6 +21,7 @@ The initial brief mentioned SQLite, but the current implementation uses Supabase
 - **Wardrobe metadata:** Supabase Postgres with owner-scoped RLS
 - **Photos:** Private Supabase Storage bucket named `wardrobe-images`
 - **Image processing:** FastAPI + Pillow; the browser sends the selected photo to the API, which checks the caller's Supabase session and returns a resized, metadata-stripped WebP
+- **Provisional image analysis:** FastAPI invokes Main 9 on a temporary image file; detected clothing attributes are returned to the user for review and are not saved by the AI
 - **Outfit data:** Postgres outfit records and ordered references to the user's clothing
 
 The browser publishable key is not a substitute for RLS. Never expose a Supabase secret/service-role key in the frontend, source code, or this plan.
@@ -31,10 +31,10 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 1. Sign up with name, email, and password.
 2. Read and accept the terms and privacy notice, and confirm the age requirement.
 3. Sign in and open the wardrobe.
-4. Select or take a clothing photo and enter category, color, type, season, and optional notes.
-5. Process the photo through FastAPI/Pillow.
-6. Upload the compressed WebP to the private Storage bucket under the signed-in user's UUID.
-7. Save the metadata and Storage object path in Postgres.
+4. Select or take a clothing photo and request temporary Main 9 analysis.
+5. Review every duplicate-filtered detection independently and correct all AI fields; enter season, formality, occasion, and optional notes for each piece.
+6. After the user confirms Save, process the photo through FastAPI/Pillow and upload the compressed WebP to the private Storage bucket under the signed-in user's UUID.
+7. Save one user-approved metadata row and unique Storage object path per detected piece in Postgres.
 8. View, filter, or remove clothing; use pieces in the drag-and-drop outfit builder and save outfits.
 
 ## Delivery plan and status
@@ -55,7 +55,10 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 
 ### 3. Clothing and photo upload
 
-- [x] Provide manual clothing metadata entry, image compression, private object upload, signed image reads, and category filters.
+- [x] Integrate Main 9 analysis before save; the AI is provisional and cannot write to Storage or Postgres.
+- [x] Review/edit all detections and structured Main 9 attributes; preserve individual clothing IDs for outfits.
+- [x] Provide image compression, private object upload, signed image reads, and category filters.
+- [ ] Review and manually apply the structured wardrobe migration to the configured Supabase project before deploying this frontend.
 - [x] Enforce image type/size/dimension limits, remove EXIF metadata, and composite transparent pixels onto white.
 - [x] Correct the local Vite API URL to the running image API on port `8001` after finding the old port `8000` route returned 404.
 - [x] Configure and verify FastAPI CORS for the local frontend origins, `http://localhost:5173` and `http://localhost:5174`.
@@ -77,17 +80,19 @@ The browser publishable key is not a substitute for RLS. Never expose a Supabase
 - [x] Backend tests, Python compilation, frontend lint, and production build pass in the local workspace (see verification below).
 - [ ] Run the authenticated browser flow and live Supabase integration checks after an authorized test account is available.
 
-## Photo upload acceptance checklist
+## Multi-item photo upload acceptance checklist
 
-An upload is verified only when all of the following succeed for a signed-in test user:
+Each item is verified only when all of the following succeed for a signed-in test user:
 
 1. The browser reaches the configured FastAPI `/api/images/compress` endpoint.
 2. The API validates the Supabase access token and returns `image/webp`.
-3. The browser uploads that WebP to `wardrobe-images/<user-uuid>/<random-id>.webp`.
-4. The browser inserts the clothing metadata and image path into Postgres.
-5. The wardrobe reloads the row and displays the image using a signed URL.
-6. Another user cannot read or delete that object's path.
-7. Removing the clothing item also removes its private Storage object.
+3. The user reviews and confirms every item; cancellation or AI rejection makes no permanent write.
+4. For each confirmed item, the browser uploads the WebP to a distinct `wardrobe-images/<user-uuid>/<random-id>.webp` path.
+5. The browser inserts one clothing row per confirmed item, preserving all structured attributes and the user's verified edits.
+6. The wardrobe reloads each row and displays its image using a signed URL.
+7. Outfit records continue to reference individual clothing row IDs.
+8. Another user cannot read or delete that object's path.
+9. Removing the clothing item also removes its private Storage object.
 
 ## Verification performed on 26 September 2026
 
