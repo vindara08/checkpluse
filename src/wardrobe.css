@@ -19,6 +19,20 @@
     --mono: 'DM Mono', Consolas, monospace;
 }
 
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    color: #f3f0e9;
+    background: #191a18;
+    --ink: #f3f0e9;
+    --muted: #aaa69d;
+    --line: #383a36;
+    --paper: #252722;
+    --canvas: #191a18;
+    --green: #91a77c;
+    --green-dark: #718460;
+    --coral: #bdac92;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -27,6 +41,8 @@ body {
     min-width: 0;
     min-height: 100vh;
     margin: 0;
+    color: var(--ink);
+    background: var(--canvas);
 }
 
 button,
@@ -94,7 +110,8 @@ textarea:focus-visible {
     min-height: 100vh;
     display: grid;
     grid-template-columns: minmax(420px, 1fr) minmax(430px, .92fr);
-    background: #f8f9f6;
+    color: var(--ink);
+    background: var(--canvas);
     animation: enter .5s ease both;
 }
 
@@ -258,6 +275,8 @@ textarea:focus-visible {
     flex-direction: column;
     justify-content: space-between;
     min-height: 100vh;
+    color: var(--ink);
+    background: var(--canvas);
 }
 
 .auth-mobile-brand {
@@ -272,7 +291,7 @@ textarea:focus-visible {
 
 .eyebrow {
     font: 10px var(--mono);
-    color: #78817b;
+    color: var(--muted);
 }
 
 .auth-form-wrap h1 {
@@ -307,9 +326,9 @@ textarea:focus-visible {
 .form-grid textarea,
 .outfit-name input {
     width: 100%;
-    border: 1px solid #dce2dd;
+    border: 1px solid var(--line);
     border-radius: 3px;
-    background: #fff;
+    background: var(--paper);
     padding: 12px 13px;
     color: var(--ink);
     font-size: 14px;
@@ -320,7 +339,7 @@ textarea:focus-visible {
 }
 
 .auth-form small {
-    color: #89918b;
+    color: var(--muted);
     font-size: 11px;
     font-weight: 400;
 }
@@ -346,7 +365,7 @@ textarea:focus-visible {
     padding: 0;
     border: 0;
     background: transparent;
-    color: #275b48;
+    color: var(--green);
     text-decoration: underline;
     text-underline-offset: 3px;
     cursor: pointer;
@@ -419,7 +438,7 @@ textarea:focus-visible {
 
 .auth-switch {
     margin-top: 23px;
-    color: #737d76;
+    color: var(--muted);
     font-size: 12px;
     text-align: center;
 }
@@ -429,7 +448,7 @@ textarea:focus-visible {
     display: flex;
     gap: 8px;
     align-items: center;
-    color: #858d87;
+    color: var(--muted);
     font-size: 10px;
 }
 
@@ -445,7 +464,7 @@ textarea:focus-visible {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: #929a94;
+    color: var(--muted);
     font: 9px var(--mono);
 }
 
@@ -2218,18 +2237,19 @@ textarea:focus-visible {
 
 .back-link {
     margin-bottom: 44px;
-    color: #63766a;
+    color: var(--muted);
     font-size: 12px;
 }
 
 .legal-page h1 {
     margin: 10px 0 12px;
+    color: var(--ink);
     font: 500 40px/1.13 'Playfair Display', Georgia, serif;
 }
 
 .legal-intro {
     margin: 0 0 34px;
-    color: #6e7a71;
+    color: var(--muted);
     font-size: 14px;
     line-height: 1.6;
 }
@@ -2241,26 +2261,27 @@ textarea:focus-visible {
 
 .legal-page section h2 {
     margin: 0 0 8px;
+    color: var(--ink);
     font-size: 13px;
 }
 
 .legal-page section p {
     margin: 6px 0 0;
-    color: #5f6c63;
+    color: var(--muted);
     font-size: 12px;
     line-height: 1.8;
 }
 
 .legal-footnote {
     margin-top: 19px;
-    color: #89938d;
+    color: var(--muted);
     font: 10px var(--mono);
 }
 
 .legal-disclaimer {
     max-width: 570px;
     margin-top: 18px;
-    color: #78847b;
+    color: var(--muted);
     font-size: 10px;
     line-height: 1.6;
 }
@@ -2272,12 +2293,13 @@ textarea:focus-visible {
     justify-content: center;
     align-items: center;
     gap: 14px;
-    color: #728177;
+    color: var(--muted);
+    background: var(--canvas);
     font-size: 12px;
 }
 
 .loading-screen .brand-mark {
-    border-color: #bdcec3;
+    border-color: var(--line);
 }
 
 @keyframes enter {

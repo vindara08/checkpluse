@@ -1,126 +1,77 @@
-# The Fold — Digital Wardrobe V0 Plan
+# The Fold — Current Project Status
 
-Last updated: 2 October 2026
+Last checked: 2 October 2026
 
-## Product goal
+This document describes the implemented V1 application and the checks still required against the actual deployed services. It is not a roadmap of unimplemented features.
 
-Build a private personal wardrobe catalogue. A user can create an account, add clothing with a photo, review and edit AI-suggested attributes alongside manual details, filter pieces by category, and save outfits made from their own pieces.
+## Product
 
-### Out of scope
+The Fold is a personal digital wardrobe. A user can catalog clothing, get provisional Main 9 attribute suggestions from a photo, review and edit the results, and save outfits that reference individual clothing items.
 
-- Outfit recommendations or other recommendation algorithms
-- Public image access, ads, or analytics
-- Unnecessary frameworks or unrelated features
+## Implemented architecture
 
-## Current architecture
+- **Web app:** React + Vite. Public landing, login/signup, signed-in wardrobe, profile, privacy/terms, and outfit UI share one frontend.
+- **Backend:** FastAPI/Python serves authenticated photo analysis, image conversion, and built-in avatar selection.
+- **Identity/data:** Supabase Auth, Supabase Postgres, and Supabase Storage. Client database/storage operations use user sessions and depend on correctly configured RLS policies.
+- **AI:** Main 9 loads the bundled YOLO26n-seg checkpoint `best.pt`, performs instance segmentation, duplicate filtering, color analysis, and heuristic pattern classification.
+- **Deployment arrangement:** Netlify frontend, Render backend, Supabase services are the intended deployment arrangement. The repository does not include declarative host configurations; inspect provider dashboards/environment settings to confirm live deployment state.
 
-The initial brief mentioned SQLite, but the current implementation uses Supabase Auth and Supabase Postgres, with Row Level Security (RLS). This reflects the previously selected Supabase publishable-key design.
+## Current workflows
 
-- **Frontend:** React + Vite
-- **Authentication:** Supabase Auth; passwords are not stored by this application
-- **Wardrobe metadata:** Supabase Postgres with owner-scoped RLS
-- **Photos:** Private Supabase Storage bucket named `wardrobe-images`
-- **Image processing:** FastAPI + Pillow; the browser sends the selected photo to the API, which checks the caller's Supabase session and returns a resized, metadata-stripped WebP
-- **Provisional image analysis:** FastAPI invokes Main 9 on a temporary image file; detected clothing attributes are returned to the user for review and are not saved by the AI
-- **Outfit data:** Postgres outfit records and ordered references to the user's clothing
+### Sign-in and account
 
-The browser publishable key is not a substitute for RLS. Never expose a Supabase secret/service-role key in the frontend, source code, or this plan.
+Public routes are `/`, `/login`, `/signup`, and `/privacy`. Login/signup use the existing Supabase Auth component. A session discovered during startup opens the app; login/signup links do not create a second authentication system. Light/dark mode is browser-persisted.
 
-## User flow
+Signup asks for name, age confirmation, Terms acceptance, and acknowledgement of the Privacy notice. Email confirmation behavior is a Supabase project setting, and its current live value has not been verified. There is no in-app forgot/reset-password flow.
 
-1. Sign up with name, email, and password.
-2. Read and accept the terms and privacy notice, and confirm the age requirement.
-3. Sign in and open the wardrobe.
-4. Select or take a clothing photo and request temporary Main 9 analysis.
-5. Review every duplicate-filtered detection independently and correct all AI fields; explicitly select season, formality, and occasion for each piece, with optional notes.
-6. After the user confirms Save, process the photo through FastAPI/Pillow and upload the compressed WebP to the private Storage bucket under the signed-in user's UUID.
-7. Save one user-approved metadata row and unique Storage object path per detected piece in Postgres.
-8. View, filter, or remove clothing; use pieces in the drag-and-drop outfit builder and save outfits.
+The signed-in UI provides home, wardrobe, outfits, profile/account controls, avatar selection, privacy/terms, export, and account deletion. Outfits reference individual clothing row IDs; there was no V1 redesign of the outfit relationship model.
 
-## Delivery plan and status
+### Clothing photo analysis and save
 
-### 1. Supabase and local setup
+1. The browser sends a selected image and current Supabase session to authenticated FastAPI `POST /api/images/analyze`.
+2. FastAPI validates the session and passes a temporary file to Main 9. Analysis does not upload a permanent image or insert a wardrobe row.
+3. Main 9 returns all supported detections after duplicate filtering, or rejects unsupported images. A single photo may contain multiple distinct garments.
+4. The user reviews and can edit each item's AI fields.
+5. The user explicitly selects Season, Formality, and Occasion for **each** item. AI does not infer these fields. Note is optional.
+6. Only when the user confirms Save does FastAPI/Pillow prepare a WebP. The browser uploads one private Storage object and inserts one clothing row per item; each wardrobe item has its own row ID and image path.
+7. Cancellation or analysis rejection does not create permanent wardrobe data. The frontend attempts cleanup if a multi-item save partially fails.
 
-- [x] Provide database schema, signup bootstrap, RLS policies, private bucket instructions, and local environment guidance in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
-- [x] Keep publishable configuration separate from server-only configuration; do not put secrets in the frontend.
-- [ ] Confirm the deployed bucket is private, then validate policies against a real signed-in account. An unauthenticated lookup reports `Bucket not found`, which does not prove whether the private bucket is absent or simply hidden from an unauthenticated caller.
-- [x] Configure the local FastAPI process's Supabase URL and publishable key in its server environment, using only the publishable key.
-- [ ] In Supabase Storage bucket `wardrobe-images`, allow `image/webp` while keeping the bucket private. A real upload attempt confirmed WebP is currently rejected.
+### AI attributes and limitations
 
-### 2. Signup, sign-in, and profile
+AI-proposed fields: clothing type, category, dominant color, secondary color, color family, brightness, and pattern. Confidence metadata is not shown to users or stored as a wardrobe attribute.
 
-- [x] Provide Supabase Auth signup/sign-in, required name, age confirmation, terms/privacy acknowledgement, and a profile page.
-- [x] Record consent versions through the database signup trigger.
-- [ ] Verify account creation, email confirmation, sign-in, and profile updates in the configured Supabase project.
+The bundled checkpoint was inspected from the workspace: it identifies as YOLO26n-seg (nano), task `segment`, with 13 labels. It is **not YOLO26s**. Checkpoint training metadata refers to a local `wardrobe_yolo/data.yaml` and does not establish DeepFashion2 as the training dataset. Do not present either YOLO26s or DeepFashion2 as verified project facts.
 
-### 3. Clothing and photo upload
+The supported labels are:
 
-- [x] Integrate Main 9 analysis before save; the AI is provisional and cannot write to Storage or Postgres.
-- [x] Review/edit all detections and structured Main 9 attributes; preserve individual clothing IDs for outfits.
-- [x] Require explicit per-item season, formality, and occasion choices; keep AI confidence scores out of wardrobe data.
-- [x] Provide image compression, private object upload, signed image reads, and category filters.
-- [ ] Review and manually apply the structured wardrobe migration to the configured Supabase project before deploying this frontend.
-- [x] Enforce image type/size/dimension limits, remove EXIF metadata, and composite transparent pixels onto white.
-- [x] Correct the local Vite API URL to the running image API on port `8001` after finding the old port `8000` route returned 404.
-- [x] Configure and verify FastAPI CORS for the local frontend origins, `http://localhost:5173` and `http://localhost:5174`.
-- [ ] After allowing WebP, complete a signed-in, end-to-end upload and confirm both the private Storage object and its matching Postgres row.
-- [ ] Verify deletion removes the metadata and corresponding Storage object in the live project.
+`short_sleeve_top`, `long_sleeve_top`, `short_sleeve_outwear`, `long_sleeve_outwear`, `vest`, `sling`, `shorts`, `trousers`, `skirt`, `short_sleeve_dress`, `long_sleeve_dress`, `vest_dress`, `sling_dress`.
 
-### 4. Outfit builder
+No shoe class exists. Some Indian ethnic clothing may be less reliably detected. Pattern analysis is heuristic rather than a trained fashion-attribute classifier. AI predictions need human review.
 
-- [x] Provide drag-and-drop and tap-to-add controls, duplicate prevention, outfit naming, and saved outfit display.
-- [ ] Verify saving and reloading an outfit against the configured Postgres schema and RLS policies.
+## Database and migrations
 
-### 5. Privacy and account controls
+Supabase schema and policies are documented in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). SQL migrations are manual and are not run by the frontend or backend:
 
-- [x] Provide a privacy notice, consent records, profile editing, data export, and account deletion controls.
-- [ ] Confirm the deployment's privacy contact, retention/backups, email settings, and current India DPDP obligations with the operator and qualified counsel before launch.
+- `20260926_add_profiles_avatar_id.sql` adds the stable built-in avatar ID to `profiles`.
+- `20261002_add_structured_ai_clothing_attributes.sql` adds structured color/type/pattern/context fields and `updated_at`; copies legacy `color` to `dominant_color` and `subcategory` to `clothing_type` when present; preserves notes, row IDs, and outfit links; adds NOT VALID context constraints; removes confidence columns if present.
 
-### 6. Quality checks
+The structured migration has not been confirmed as applied to the configured live Supabase project. The repository history and prior local/live testing recorded required manual database and Storage setup before a production wardrobe save can be considered verified.
 
-- [x] Backend tests, Python compilation, frontend lint, and production build pass in the local workspace (see verification below).
-- [ ] Run the authenticated browser flow and live Supabase integration checks after an authorized test account is available.
+## Security and deployment checks
 
-## Multi-item photo upload acceptance checklist
+- Keep the Storage bucket private and allow WebP uploads.
+- Keep RLS active on tables and Storage objects, with user ownership enforced.
+- Use only the Supabase publishable key in the frontend; never use a service-role key in browser configuration.
+- Configure backend `APP_ORIGINS` with the actual frontend hosts. Local Vite ports 5173 and 5174 are allowed in source.
+- Set the production `VITE_API_URL` to the deployed FastAPI origin.
+- Confirm Render/Netlify/Supabase dashboard settings, email behavior, schema/migrations, private bucket policy, and user-scoped reads/writes before release.
 
-Each item is verified only when all of the following succeed for a signed-in test user:
+## Local verification and unverified live behavior
 
-1. The browser reaches the configured FastAPI `/api/images/compress` endpoint.
-2. The API validates the Supabase access token and returns `image/webp`.
-3. The user reviews and confirms every item; cancellation or AI rejection makes no permanent write.
-4. For each confirmed item, the browser uploads the WebP to a distinct `wardrobe-images/<user-uuid>/<random-id>.webp` path.
-5. The browser inserts one clothing row per confirmed item, preserving all structured attributes and the user's verified edits.
-6. The wardrobe reloads each row and displays its image using a signed URL.
-7. Outfit records continue to reference individual clothing row IDs.
-8. Another user cannot read or delete that object's path.
-9. Removing the clothing item also removes its private Storage object.
+The repository provides `npm run lint`, `npm run build`, and `pytest` tests under `backend/`. These validate local source/build and mocked API contracts. They do not prove live Supabase persistence, provider deployment health, production email confirmation behavior, or cross-user RLS isolation.
 
-## Verification performed on 26 September 2026
+Live browser testing requires an authorized Supabase account. Verify the complete analysis → human review → multi-item save → reload and outfit linkage flow after applying the structured migration and confirming WebP is allowed by the private bucket.
 
-- The frontend is configured with a Supabase URL and publishable-key-shaped value; the Supabase Auth health endpoint returned **200**.
-- The browser loaded the sign-in page, but no signed-in session was available.
-- Before the local API URL correction, the frontend's configured image endpoint at port `8000` returned **404** for `/api/images/compress`. The running FastAPI image route at port `8001` returned **401** without a session, as expected.
-- A browser request initially hit a CORS failure because the active API allowed a different local origin. The local API environment was configured for `http://localhost:5173`, and the API was restarted.
-- The local Vite environment setting is now `http://localhost:8001/api`. A browser request from `http://localhost:5173` now reaches the correct API and receives **401 Sign in to upload a photo** rather than a CORS error or 404.
-- A signed-in browser upload was then reproduced: FastAPI image compression returned **200**, but Supabase Storage rejected the WebP object with **400 `mime type image/webp is not supported`**. This is the current direct cause of the upload failure. The bucket's allowed MIME types must include `image/webp`; setup instructions and the user-facing error are updated accordingly.
-- A read-only Storage bucket lookup without a signed-in session returned **Bucket not found** for `wardrobe-images`. Since the bucket is meant to be private, that unauthenticated response is inconclusive: the bucket may be absent or its metadata may not be visible to this caller. Confirm in the Supabase Dashboard or with an authorized test session.
-- **A successful authenticated image upload is not yet verified.** The Storage upload was tested while signed in but rejected because WebP is not allowed by the bucket. The bucket configuration cannot be changed with the app's publishable key. After an authorized project administrator enables WebP, retry the test and confirm both the Storage object and database row.
-- Local `backend/.env` now contains only the Supabase URL, publishable key, bucket name, and allowed frontend origin; no service-role/secret key was added. This configures the image API, but does not establish that the bucket/schema/policies are provisioned in the remote Supabase project.
-- Earlier automated checks: **9 backend tests passed**, Python compilation passed, frontend lint passed, production build passed with a temporary 512 MB Node heap, and editor diagnostics reported no errors. The build heap setting was only for that validation command.
+## Out of scope for this version
 
-## Avatar transport update — 26 September 2026
-
-The built-in avatar transport issue was traced to CORS configuration rather than a new profile system. The frontend sends `PUT /api/profile/avatar` with JSON `{ "avatar_id": "fern" }`, an `Authorization` bearer token, and `Content-Type: application/json`. That request requires a preflight. The backend origin list did not reliably include the active Vite origin `http://localhost:5174` in every local launch configuration, so the preflight was rejected before the endpoint ran. FastAPI now preserves configured origins and explicitly allows the two local Vite origins `http://localhost:5173` and `http://localhost:5174`; the frontend example configuration documents both. The avatar request also has a bounded 10-second timeout with a useful failure message.
-
-Local verification now confirms the `OPTIONS` preflight for port 5174 returns HTTP 200 and permits `PUT`, `Authorization`, and `Content-Type`. The endpoint still validates the five IDs and scopes the Supabase update to the verified user's `profiles.id`.
-
-**Still pending:** the SQL migration has not been executed automatically, and persistence, refresh/re-login, and cross-user RLS behavior still require an authorized live Supabase test. Do not mark avatar database persistence as verified until that test succeeds.
-
-## Next steps to finish live upload verification
-
-1. Create `wardrobe-images` as a **private** bucket in the Supabase Dashboard and apply the documented schema/RLS/Storage policies.
-2. Sign in with an authorized test account, add a harmless test image, and verify the WebP object and metadata row in the Supabase dashboard.
-3. Remove the test item and confirm both the metadata row and image are gone.
-4. Record any environment-specific issues here without adding credentials or personal data.
-
-The legal copy and technical controls are implementation aids, not a legal-compliance certification. Have the actual service operation and user-facing terms reviewed for applicable India requirements before production use.
+There is no outfit recommendation engine, external paid AI API, shoe detection, in-app password recovery, fabric/material inference, brand/size/price inference, or new image-sharing system.

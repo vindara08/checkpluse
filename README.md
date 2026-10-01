@@ -1,53 +1,92 @@
-# The Fold: Digital Wardrobe V0
+# The Fold — Digital Wardrobe
 
-A personal clothing catalogue and outfit builder. Main 9 suggests clothing attributes from a temporarily processed upload; the account holder reviews and edits those suggestions before saving. There are no outfit recommendations, advertising, or analytics.
+The Fold helps people organize clothing they own, review photo-based clothing suggestions, and make saved outfits from individual wardrobe items.
 
-See [DIGITAL_WARDROBE_PLAN.md](./DIGITAL_WARDROBE_PLAN.md) for the end-to-end product plan, current implementation status, and remaining live-upload verification steps.
+## Current capabilities
 
-## Stack and data flow
+- Public landing page, login, and signup entry points using the existing Supabase Auth flow.
+- Light and dark themes persisted in the browser and carried between public, authentication, and signed-in views.
+- A personal wardrobe with photo upload, search, category filters, item editing/deletion, profile tools, and data export.
+- Main 9 analyzes a temporary image and returns every supported, duplicate-filtered clothing detection. Users review and may edit AI fields before any permanent upload or database insert.
+- Each accepted detection is saved as its own clothing row and private image object. Outfits continue to reference individual clothing-row IDs.
+- Outfit builder with tap/drag-to-canvas, naming, and saved outfit editing.
+- Privacy and terms pages, age/terms/privacy acknowledgement on signup, consent records, and account deletion controls.
 
-- React + Vite with Supabase Auth and the Supabase publishable key.
-- Supabase Postgres for profiles, consent records, clothing metadata, outfits, and outfit items. Row Level Security (RLS) scopes data to each signed-in user.
-- Private Supabase Storage bucket for compressed WebP photos, with ownership enforced by Storage RLS policies.
-- FastAPI validates Supabase access tokens, temporarily analyzes clothing photos with Main 9, and compresses images only after the user reviews the suggestions. Avatar images are bundled with the frontend; only the selected avatar ID is stored in the profile.
+## Technology and deployment
 
-The publishable key is safe to include in the frontend only because RLS policies are enabled. A Supabase service-role key is not used and must never be put in the browser.
-This storage redesign uses Supabase Auth instead of the previous local SQLite account/session store. Existing SQLite accounts and wardrobe records are not automatically imported; retain a protected backup before switching.
+- **Frontend:** React 19, Vite 8, JavaScript, and `@supabase/supabase-js`.
+- **Backend:** Python 3.12, FastAPI, Uvicorn, Pillow, and HTTPX.
+- **Database/auth/storage:** Supabase Auth, Supabase Postgres, and Supabase Storage, protected by user sessions and Row Level Security (RLS).
+- **Image analysis:** Main 9, Ultralytics YOLO26 instance segmentation, OpenCV, NumPy, and scikit-learn. The bundled checkpoint is `best.pt`.
+- **Deployment arrangement:** Netlify for the Vite frontend, Render for the FastAPI service, and Supabase for database, authentication, and storage. The repository has a Netlify SPA rewrite but no declarative Netlify or Render service configuration; deployed dashboard settings and production health have not been independently verified here.
 
-## Run locally
+### Verified checkpoint identity
 
-1. Install Node.js 20.19+ and Python 3.12+.
-2. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to create a Supabase project, the private `wardrobe-images` bucket, tables, signup trigger, and RLS policies. After reviewing the deployed schema, apply [20260926_add_profiles_avatar_id.sql](./supabase/migrations/20260926_add_profiles_avatar_id.sql) to enable built-in avatar selection.
-3. Copy `.env.example` to `.env.local` and `backend/.env.example` to `backend/.env`. Put the Supabase project URL and publishable key in both files. These are publishable project settings; no secret key is required. Set the frontend origin in backend `APP_ORIGINS`.
-4. Start the frontend:
+The bundled `best.pt` checkpoint was loaded from the workspace and reports a **YOLO26n-seg** model with 13 class labels. It is not YOLO26s. Its training metadata refers to a local `wardrobe_yolo/data.yaml` path and does not establish that the training dataset was DeepFashion2. For that reason, this project does not claim YOLO26s or DeepFashion2 as verified implementation facts.
+
+The 13 supported labels are `short_sleeve_top`, `long_sleeve_top`, `short_sleeve_outwear`, `long_sleeve_outwear`, `vest`, `sling`, `shorts`, `trousers`, `skirt`, `short_sleeve_dress`, `long_sleeve_dress`, `vest_dress`, and `sling_dress`. Shoes are not a model class.
+
+## AI data and review flow
+
+AI suggestions are clothing type, category, dominant color, secondary color, color family, brightness, and pattern. Main 9 uses instance masks, duplicate filtering, color extraction, and heuristic pattern analysis. It returns all remaining detections, not only the first.
+
+Season, Formality, and Occasion are **not inferred by AI**. The user must explicitly choose each of these fields for every detected item before saving. Note is optional free text. Confidence values remain internal AI information and are not user-facing wardrobe attributes or persisted clothing columns.
+
+```text
+Select photo → temporary analysis → review each detection → correct AI fields
+→ choose Season, Formality, Occasion for each item → Save
+→ private Storage objects + individual Supabase clothing rows
+```
+
+Unsupported/non-clothing images are rejected by analysis and are not permanently uploaded or saved as clothing rows. Cancelling before Save also produces no permanent write.
+
+### Known AI limitations
+
+- Only the 13 classes listed above are supported; shoes are not detected.
+- Detection reliability depends on the image and garment presentation. Some Indian ethnic clothing may be detected less reliably.
+- Pattern classification is heuristic; it is not a dedicated trained fashion-attribute model.
+- AI suggestions should be reviewed and corrected by the user.
+- The checkpoint's provenance does not confirm DeepFashion2; no dataset claim is made.
+
+See [ai service.md](./ai%20service.md) for the implementation-level analysis notes and [VERSION_1.md](./VERSION_1.md) for the V1 history.
+
+## Database and migrations
+
+The base schema, signup trigger, RLS policies, private bucket setup, and verification instructions are in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Existing installations may need the manual migrations:
+
+- [`20260926_add_profiles_avatar_id.sql`](./supabase/migrations/20260926_add_profiles_avatar_id.sql) adds the bundled-avatar identifier to profiles.
+- [`20261002_add_structured_ai_clothing_attributes.sql`](./supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql) adds structured Main 9 fields, copies legacy `color`/`subcategory` values when those columns exist, preserves notes and outfit IDs, adds context checks for new/updated rows, and drops legacy confidence columns if present.
+
+These SQL files are not executed by the app. Repository history records that the structured migration still required manual application to the configured Supabase deployment; deployment state must be checked before releasing this frontend. Never make the image bucket public or disable RLS.
+
+## Local development
+
+Requirements: Node.js 20.19+ and Python 3.12+. Install the frontend dependencies with `npm install`, and backend dependencies with `pip install -r requirements.txt`. Keep `best.pt` beside `main9.py`.
+
+1. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to create/check the Supabase schema, policies, private `wardrobe-images` bucket, and allowed WebP MIME type.
+2. Copy `.env.example` to `.env.local` and `backend/.env.example` to `backend/.env`. Use the Supabase project URL and publishable key placeholders. Do not put a service-role/secret key in frontend configuration.
+3. Start the frontend:
 
    ```powershell
-   npm install
    npm run dev
    ```
 
-5. In a second terminal, start FastAPI:
+4. Start the backend in another terminal:
 
    ```powershell
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
+   .\.venv\Scripts\Activate.ps1
    python -m uvicorn main:app --app-dir backend --reload
    ```
 
-6. Open the Vite URL shown in the terminal. Restart Vite after changing `.env.local` and FastAPI after changing `backend/.env`.
+The local API defaults to `http://localhost:8001/api`. Set `VITE_API_URL` for the deployed API and configure the backend `APP_ORIGINS` with the real frontend origins. Restart each process after changing its environment.
 
-## Image flow
+## Authentication, privacy, and operational status
 
-The browser first sends the selected image and session token to FastAPI for temporary Main 9 analysis. Main 9 uses the bundled `best.pt` weights, YOLO detection and segmentation, duplicate filtering, and color/pattern analysis, returning one structured suggestion for every distinct detection. Unsupported images are rejected without a permanent upload or database row. The user reviews and can correct every AI field, then must explicitly select season, formality, and occasion for each item; notes are optional. Confidence scores are internal model metadata and are not returned to the wardrobe UI, exported, or stored in clothing records. Only after confirmation does Pillow reorient, resize to at most 1600 px, composite transparent pixels onto white, convert to WebP, and strip EXIF metadata. Each reviewed clothing item receives its own row and unique private Storage path (a copy of the selected image), preserving individual IDs for outfit references and independent deletion. The desktop prototype's Tkinter UI is optional and does not prevent headless FastAPI/Render imports. Built-in avatars are frontend assets; `profiles.avatar_id` stores only the selected stable ID, never image bytes. No avatar Storage bucket or upload is used.
+Supabase Auth manages passwords and sessions. Signup requires a name, age confirmation, and acknowledgement of the Terms and Privacy notice. Whether Supabase email confirmation is required depends on the project-level Auth configuration; that deployed setting is not established by this repository. There is no in-app forgot-password or reset-password flow.
 
-For an existing Supabase deployment, review and manually apply [`supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql`](./supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql) before deploying the updated frontend. It renames the old `color` and `subcategory` columns in place, adds structured Main 9 attributes and user context, preserves existing notes and outfit links, and does not drop existing rows. New installations should use the updated schema in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md).
+The browser uses only a Supabase publishable key; RLS and Storage policies must enforce user ownership. FastAPI verifies the user's Supabase access token before protected image analysis, compression, and avatar operations. Analysis is temporary. On Save, FastAPI/Pillow reorients, bounds, converts to WebP, and strips embedded metadata; React uploads private per-item object paths and inserts metadata rows. The app does not use an AI provider API, advertising, or analytics.
 
-The bundled avatar IDs map to `public/avatars/fold-fern.svg` (`fern`), `fold-terracotta.svg` (`terracotta`), `fold-sage.svg` (`sage`), `fold-indigo.svg` (`indigo`), and `fold-ochre.svg` (`ochre`). Keep these identifiers aligned with the database check constraint and FastAPI allowlist.
-
-## Privacy and launch readiness
-
-RLS and Storage policies are mandatory; never make the bucket public or disable RLS. Signup captures age confirmation and terms/privacy versions. Review region, authentication email settings, retention/backups, grievance contact, and current India DPDP obligations with qualified counsel before real users. Legal copy in the app is a technical starter, not legal advice or a compliance certification.
+The legal pages are implementation copy, not legal advice or a compliance certification. Confirm real retention, email, complaint-contact, regional, and applicable legal settings with the operator before launch.
 
 ## Checks
 
@@ -57,10 +96,4 @@ npm run build
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Current avatar status
-
-The app uses five bundled, selectable avatars: `fern`, `terracotta`, `sage`, `indigo`, and `ochre`. The browser sends the selected identifier to FastAPI at `PUT /api/profile/avatar`; FastAPI validates the identifier and updates the authenticated user's existing `profiles.avatar_id` value through Supabase. No profile image upload or avatar Storage bucket is used.
-
-Local development CORS allows both `http://localhost:5173` and `http://localhost:5174`, in addition to any origins listed in `backend/.env`. The avatar request has a bounded 10-second timeout and reports backend errors to the user. Run the manual avatar migration in `supabase/migrations/20260926_add_profiles_avatar_id.sql` only after reviewing the deployed schema and RLS policies; SQL is not executed by the application.
-
-The CORS/preflight and frontend/backend contract are covered by local tests. Persistence through the actual Supabase project, refresh/re-login behavior, and two-user RLS verification still require an authorized live test account.
+The checked-in backend tests are local contract/unit tests. Live Supabase persistence, deployment configuration, cross-user RLS, and end-to-end authenticated uploads require an authorized deployed test account and are not claimed as verified by these commands.

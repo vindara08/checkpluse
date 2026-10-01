@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase, supabaseConfigured } from './supabase'
 import './wardrobe.css'
 
@@ -846,14 +846,19 @@ export default function WardrobeApp() {
   const user = session?.user
   const userId = user?.id
   const accessToken = session?.access_token
-  useEffect(() => {
+  useLayoutEffect(() => {
     window.localStorage.setItem('the-fold-theme', theme)
+    document.documentElement.dataset.theme = theme
   }, [theme])
   useEffect(() => {
     const handlePopState = () => setPublicRoute(publicRouteFromPath(window.location.pathname))
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
+  useEffect(() => {
+    if (!session || !['login', 'signup'].includes(publicRoute)) return
+    window.history.replaceState({}, '', '/')
+  }, [publicRoute, session])
   const navigatePublic = useCallback((path) => {
     window.history.pushState({}, '', path)
     setPublicRoute(publicRouteFromPath(path))
@@ -1152,9 +1157,9 @@ export default function WardrobeApp() {
     }
   }
 
-  if (!supabaseConfigured) return <main className="legal-page"><div className="eyebrow">THE FOLD / SETUP</div><h1>Supabase is not configured.</h1><p className="legal-intro">Create a local <code>.env.local</code> from the provided example and set the Supabase project URL and publishable key. Follow <code>SUPABASE_SETUP.md</code> to create the database tables, private image bucket and access policies.</p></main>
-  if (busy) return <div className="loading-screen"><Mark /><span>Opening your wardrobe…</span></div>
-  if (loadingError && !session) return <main className="loading-recovery"><Mark /><h1>We couldn’t open your wardrobe.</h1><p>{loadingError}</p><button className="button button-primary" onClick={retryLoading}>Retry</button></main>
+  if (!supabaseConfigured) return <div className={`app-shell theme-${theme}`}><main className="legal-page"><div className="eyebrow">THE FOLD / SETUP</div><h1>Supabase is not configured.</h1><p className="legal-intro">Create a local <code>.env.local</code> from the provided example and set the Supabase project URL and publishable key. Follow <code>SUPABASE_SETUP.md</code> to create the database tables, private image bucket and access policies.</p></main></div>
+  if (busy) return <div className={`app-shell theme-${theme}`}><div className="loading-screen"><Mark /><span>Opening your wardrobe…</span></div></div>
+  if (loadingError && !session) return <div className={`app-shell theme-${theme}`}><main className="loading-recovery"><Mark /><h1>We couldn’t open your wardrobe.</h1><p>{loadingError}</p><button className="button button-primary" onClick={retryLoading}>Retry</button></main></div>
   const profileSection = ['profile', 'security', 'account'].includes(page) ? page : ''
   const navigateProfileSection = (section) => setPage(section)
   const profileNav = (next) => next === 'profile' || next === 'security' || next === 'account' ? navigateProfileSection(next) : setPage(next)
@@ -1173,7 +1178,7 @@ export default function WardrobeApp() {
   if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} session={session} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onAvatarSaved={saveAvatarToProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
-  if (!session && publicRoute === 'privacy') return <LegalPage privacy backLabel="Back to The Fold" onBack={() => navigatePublic('/')} />
+  if (!session && publicRoute === 'privacy') return <div className={`app-shell theme-${theme}`}><LegalPage privacy backLabel="Back to The Fold" onBack={() => navigatePublic('/')} /></div>
   if (!session) {
     if (publicRoute === 'login' || publicRoute === 'signup') {
       return <div className={`app-shell theme-${theme}`}><Auth mode={publicRoute} onModeChange={(mode) => navigatePublic(mode === 'signup' ? '/signup' : '/login')} onSignedIn={signInFromPublicPage} /></div>
