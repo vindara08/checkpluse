@@ -8,6 +8,12 @@ const TERMS_VERSION = '1.0'
 const PRIVACY_VERSION = '1.0'
 const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories']
 const categoryOptions = categories.slice(1)
+const AI_CATEGORY_MAP = {
+  Top: 'Tops',
+  Bottom: 'Bottoms',
+  Dress: 'Dresses',
+  Outerwear: 'Outerwear',
+}
 const BUILT_IN_AVATARS = [
   { id: 'fern', label: 'Fern', src: '/avatars/fold-fern.svg' },
   { id: 'terracotta', label: 'Terracotta', src: '/avatars/fold-terracotta.svg' },
@@ -479,15 +485,54 @@ function AddClothing({ session, userId, onClose, onSaved }) {
     if (preview) URL.revokeObjectURL(preview)
     setFile(next)
     setPreview(URL.createObjectURL(next))
+    setCategory('Tops')
+    setColor('')
+    setSubcategory('')
+    setSeason('')
+    setNotes('')
     setError('')
   }
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
+
+  async function analyzeSelectedImage(nextFile) {
+    if (!nextFile) throw new Error('Choose a photo to continue.')
+    const form = new FormData()
+    form.append('photo', nextFile)
+    const response = await fetch(`${API}/images/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+      body: form,
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.detail || payload.message || 'Could not analyze this image.')
+    }
+    const candidate = payload.items?.[0]
+    if (!payload.success || !candidate) {
+      throw new Error(payload.message || 'No supported clothing was detected in that image.')
+    }
+    const mappedCategory = AI_CATEGORY_MAP[candidate.category] || categoryOptions[0]
+    setCategory(mappedCategory)
+    setSubcategory(String(candidate.clothing_type || candidate.category || '').replace(/_/g, ' '))
+    setColor(candidate.dominant_color || candidate.color_family || '')
+    setNotes((existing) => existing || `AI suggestion: ${candidate.pattern || 'solid'} pattern • ${candidate.dominant_color || candidate.color_family || 'uncertain'} color`)
+    return payload
+  }
+
   async function submit(event) {
     event.preventDefault()
     if (step === 0) {
       if (!file) { setError('Choose a photo to continue.'); return }
+      setBusy(true)
       setError('')
-      setStep(1)
+      try {
+        await analyzeSelectedImage(file)
+        setStep(1)
+      } catch (err) {
+        setError(err.message || 'Could not analyze this photo.')
+      } finally {
+        setBusy(false)
+      }
       return
     }
     if (step === 1) {
@@ -544,7 +589,7 @@ function AddClothing({ session, userId, onClose, onSaved }) {
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="modal-actions add-actions">
         <button type="button" className="button button-quiet" onClick={step ? () => setStep(step - 1) : onClose}>{step ? 'Back' : 'Cancel'}</button>
-        <button className="button button-primary" disabled={busy}>{busy ? 'Saving to your wardrobe…' : step === 2 ? 'Save to wardrobe' : 'Continue'}</button>
+        <button className="button button-primary" disabled={busy}>{busy ? 'Analyzing photo…' : step === 2 ? 'Save to wardrobe' : 'Continue'}</button>
       </div>
     </form>
   </section></div>

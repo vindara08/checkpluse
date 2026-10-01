@@ -227,6 +227,44 @@ def test_avatar_update_is_scoped_to_verified_user_and_uses_user_token(client, mo
     assert request_details["headers"]["Authorization"] == "Bearer user-access-token"
 
 
+def test_analyze_upload_requires_supabase_access_token(client, monkeypatch):
+    mock_user_verification(monkeypatch)
+    response = client.post(
+        "/api/images/analyze",
+        files={"photo": ("shirt.png", png_bytes(), "image/png")},
+    )
+    assert response.status_code == 401
+
+
+def test_analyze_upload_returns_main9_result_for_valid_image(client, monkeypatch):
+    mock_user_verification(monkeypatch, body={"id": "owner-uuid"})
+    monkeypatch.setattr(
+        api,
+        "analyze_uploaded_image",
+        lambda data: {
+            "success": True,
+            "message": "Clothing detected successfully.",
+            "items": [{
+                "category": "Top",
+                "clothing_type": "short_sleeve_top",
+                "dominant_color": "Blue",
+                "color_family": "Blue",
+                "pattern": "solid",
+            }],
+        },
+    )
+
+    response = client.post(
+        "/api/images/analyze",
+        headers={"Authorization": "Bearer " + "test-token"},
+        files={"photo": ("shirt.png", png_bytes(), "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert response.json()["items"][0]["category"] == "Top"
+
+
 def test_compress_image_reencodes_to_webp_and_bounds_dimensions():
     compressed = api.compress_image(png_bytes((1800, 1200)))
     with Image.open(io.BytesIO(compressed)) as result:
