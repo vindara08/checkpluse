@@ -124,8 +124,8 @@ function ProfileSectionNav({ active, onNavigate }) {
   </nav>
 }
 
-function LegalPage({ privacy = false, onBack, onPrivacy, activeSection, onSectionNavigate }) {
-  return <main className={`legal-page${activeSection ? ' profile-document' : ''}`}><button className="text-button back-link" onClick={onBack}>← Back to account</button><div className="eyebrow">THE FOLD / {privacy ? 'PRIVACY' : 'TERMS'}</div>{activeSection && <ProfileSectionNav active={activeSection} onNavigate={onSectionNavigate} />}<h1>{privacy ? 'Your wardrobe stays yours.' : 'Terms & conditions'}</h1><p className="legal-intro">{privacy ? 'A plain-language notice about personal data for The Fold.' : 'A straightforward agreement for keeping your personal wardrobe in one place.'}</p>
+function LegalPage({ privacy = false, onBack, onPrivacy, activeSection, onSectionNavigate, backLabel = 'Back to account' }) {
+  return <main className={`legal-page${activeSection ? ' profile-document' : ''}`}><button className="text-button back-link" onClick={onBack}>← {backLabel}</button><div className="eyebrow">THE FOLD / {privacy ? 'PRIVACY' : 'TERMS'}</div>{activeSection && <ProfileSectionNav active={activeSection} onNavigate={onSectionNavigate} />}<h1>{privacy ? 'Your wardrobe stays yours.' : 'Terms & conditions'}</h1><p className="legal-intro">{privacy ? 'A plain-language notice about personal data for The Fold.' : 'A straightforward agreement for keeping your personal wardrobe in one place.'}</p>
     {privacy ? <><section><h2>What we collect and why</h2><p>Your email, name and consent records support your account. Clothing photos and details are used to show your wardrobe and saved outfits. When you add an item, the photo is temporarily processed by the Main 9 clothing-analysis service to suggest clothing details; analysis does not create a wardrobe record or permanently store the photo. The photo is uploaded to your private wardrobe only after you review and save. Photos are not used to train models. The service has no advertising, analytics, precise location, or contacts collection.</p></section><section><h2>Where it is stored</h2><p>Account and wardrobe data are stored in Supabase Postgres. Compressed photos are stored in a private Supabase Storage bucket. Row-level security limits access to the signed-in account; FastAPI validates your Supabase session before temporarily processing an image for analysis or compression.</p></section><section><h2>Your choices and rights</h2><p>You can export your data, update your name and clothing details, or delete your account. Account deletion also requests removal of your stored photos. Contact: <strong>shubhank44jha@gmail.com</strong></p></section><section><h2>Security and retention</h2><p>Supabase Auth manages passwords and sessions. Images are re-encoded to strip embedded metadata. Unapproved analysis files are temporary and are removed after processing. Saved data is kept while your account is active and removed on account deletion, subject to technical backup retention and records required by law.</p></section><section><h2>India</h2><p>The implementation supports data minimisation, purpose limitation, safeguards, consent records, and user control. The operator must confirm current DPDP Act and Rules obligations, retention requirements, grievance contact, and any transfer practices with qualified counsel before launch.</p></section><p className="legal-footnote">Privacy notice version 1.1 · Effective 1 October 2026</p></> : <><section><h2>Using The Fold</h2><p>The Fold is a private tool for cataloguing clothing and saving outfits. You must be at least 18 years old to create an account. Keep your sign-in details confidential and tell us promptly if you suspect unauthorised access.</p></section><section><h2>Your content</h2><p>You retain ownership of photos and details you add. You allow us to store and display them only to provide the wardrobe and outfit features you request. Main 9 temporarily analyzes clothing photos to suggest details; you review and can correct its suggestions before saving. Photos are not used to train models or generate recommendations.</p></section><section><h2>Privacy and account closure</h2><p>We use account and wardrobe information only to provide the service and protect accounts. You can export your data or delete your account at any time. Deletion removes account records and associated photos. Read our <button className="inline-link" onClick={onPrivacy}>Privacy notice</button>.</p></section><section><h2>Availability and changes</h2><p>The service is provided as available and may change as this early version develops. We will give notice of material changes. You may stop using the service and delete your account at any time.</p></section><section><h2>Contact and complaints</h2><p>For support, privacy requests, or complaints, contact the operator using the address in the Privacy notice or deployment configuration. The operator should acknowledge and address complaints promptly.</p></section><p className="legal-footnote">Effective 1 October 2026 · Terms version 1.1</p><p className="legal-disclaimer">This starter text is not legal advice. Have final terms reviewed for actual operations in India.</p></>}
   </main>
 }
@@ -182,8 +182,72 @@ async function compressPhoto(file, session) {
   return response.blob()
 }
 
-function Auth({ onSignedIn }) {
-  const [mode, setMode] = useState('login')
+function publicRouteFromPath(pathname) {
+  if (pathname === '/login') return 'login'
+  if (pathname === '/signup') return 'signup'
+  if (pathname === '/privacy') return 'privacy'
+  return 'landing'
+}
+
+function PublicLanding({ theme, onThemeChange, onNavigate }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = () => setMenuOpen(false)
+  const navigate = (path) => {
+    closeMenu()
+    onNavigate(path)
+  }
+  return <main className="public-landing">
+    <header className="public-header">
+      <a className="public-wordmark" href="/" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="The Fold home"><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></a>
+      <nav className={`public-nav${menuOpen ? ' public-nav-open' : ''}`} aria-label="Public navigation">
+        <a href="#how-it-works" onClick={closeMenu}>How it works</a>
+        <a href="#thoughtful-by-design" onClick={closeMenu}>Thoughtful by design</a>
+        <button className="text-button public-login" onClick={() => navigate('/login')}>Log in</button>
+        <button className="button button-primary public-nav-cta" onClick={() => navigate('/signup')}>Get started <span aria-hidden="true">↗</span></button>
+      </nav>
+      <div className="public-header-actions">
+        <ThemeToggle theme={theme} onChange={onThemeChange} />
+        <button className="public-menu-toggle" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><span /><span /></button>
+      </div>
+    </header>
+    <section className="public-hero">
+      <div className="public-hero-copy">
+        <span className="eyebrow"><span className="public-status-dot" /> A LITTLE MORE ROOM TO GET DRESSED</span>
+        <h1>Know what you own.<br /><em>Love getting dressed.</em></h1>
+        <p className="public-hero-intro">A quieter place for the clothes you already have. Keep your wardrobe together, make outfits from your own pieces, and start the day with a little more clarity.</p>
+        <div className="public-hero-actions"><button className="button button-primary" onClick={() => navigate('/signup')}>Make it yours <span aria-hidden="true">↗</span></button><button className="public-text-cta" onClick={() => navigate('/login')}>Already have an account? <span>Log in</span></button></div>
+        <div className="public-proof"><span className="lock-dot" /> Private by default <i /> No ads or recommendations</div>
+      </div>
+      <div className="public-hero-visual" role="img" aria-label="Illustrative preview of a neatly organized digital wardrobe">
+        <div className="public-visual-top"><span>YOUR WARDROBE</span><span className="public-visual-count">A PLACE FOR YOUR PIECES</span></div>
+        <div className="public-visual-title"><strong>In good company.</strong><span>A considered view of what you own.</span></div>
+        <div className="public-garment-grid">
+          <div className="public-garment-card public-garment-card-sage"><span className="public-garment-shape public-garment-shirt" /><small>THE EVERYDAY</small></div>
+          <div className="public-garment-card public-garment-card-clay"><span className="public-garment-shape public-garment-trousers" /><small>READY TO GO</small></div>
+          <div className="public-garment-card public-garment-card-blue"><span className="public-garment-shape public-garment-coat" /><small>THE EXTRA LAYER</small></div>
+        </div>
+        <div className="public-visual-footer"><span><i /> MADE FROM YOUR WARDROBE</span><span>AN ILLUSTRATIVE PREVIEW</span></div><div className="public-visual-stamp" aria-hidden="true">YOURS<br />BY DESIGN</div>
+      </div>
+      <a className="public-scroll-cue" href="#how-it-works"><span /> A MORE THOUGHTFUL ROUTINE</a>
+    </section>
+    <section id="how-it-works" className="public-how">
+      <div className="public-section-heading"><span className="eyebrow">LESS FUSS, MORE YOU</span><h2>A wardrobe that works<br />with real life.</h2><p>Keep your pieces close, your choices clear, and your personal style entirely your own.</p></div>
+      <div className="public-feature-grid">
+        <article className="public-feature"><span className="public-feature-number">01</span><span className="public-feature-icon" aria-hidden="true">↗</span><h3>Bring it all together</h3><p>Add photos of your clothes and keep a searchable, personal record of the pieces you reach for.</p><a href="/signup" onClick={(event) => { event.preventDefault(); navigate('/signup') }}>Start your wardrobe <span aria-hidden="true">→</span></a></article>
+        <article className="public-feature"><span className="public-feature-number">02</span><span className="public-feature-icon public-feature-icon-coral" aria-hidden="true">✳</span><h3>A helpful first pass</h3><p>AI can suggest clothing details from a photo. You review and edit every suggestion before anything is saved.</p><a href="#thoughtful-by-design">See how it works <span aria-hidden="true">→</span></a></article>
+        <article className="public-feature"><span className="public-feature-number">03</span><span className="public-feature-icon public-feature-icon-yellow" aria-hidden="true">＋</span><h3>Make outfits your own</h3><p>Put together looks from individual pieces in your wardrobe and save the combinations you want to remember.</p><a href="/signup" onClick={(event) => { event.preventDefault(); navigate('/signup') }}>Find your flow <span aria-hidden="true">→</span></a></article>
+      </div>
+    </section>
+    <section id="thoughtful-by-design" className="public-review">
+      <div className="public-review-art" aria-hidden="true"><div className="public-review-paper"><span className="eyebrow">A HUMAN-IN-THE-LOOP WARDROBE</span><div className="public-review-line" /><div className="public-review-line public-review-line-short" /><div className="public-review-chip">AI SUGGESTION</div><div className="public-review-edit"><span>Color</span><strong>Your call <i>⌄</i></strong></div><div className="public-review-confirm"><span>✓</span> Reviewed by you</div></div><span className="public-review-spark">✳</span></div>
+      <div className="public-review-copy"><span className="eyebrow">THOUGHTFUL BY DESIGN</span><h2>AI helps with the details.<br /><em>You make the call.</em></h2><p>When you add a piece, The Fold can suggest what it sees. You can review and correct each suggestion, add the details that matter to you, and save only when everything looks right.</p><ul><li><span>01</span> Your photo is analyzed for clothing details.</li><li><span>02</span> You review and edit every suggested field.</li><li><span>03</span> Nothing is added until you choose to save.</li></ul><button className="button button-outline" onClick={() => navigate('/signup')}>See it for yourself <span aria-hidden="true">↗</span></button></div>
+    </section>
+    <section className="public-final-cta"><span className="eyebrow">START WITH WHAT YOU HAVE</span><h2>Your wardrobe, a little<br /><em>more in order.</em></h2><p>Make a space for your pieces and the outfits you make with them.</p><button className="button button-primary" onClick={() => navigate('/signup')}>Get started <span aria-hidden="true">↗</span></button><span className="public-final-note">PRIVATE BY DEFAULT · MADE FOR YOUR EVERYDAY</span></section>
+    <footer className="public-footer"><a className="public-wordmark" href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}><Mark /><span>THE FOLD<small>YOUR WARDROBE, WELL KEPT</small></span></a><span className="public-footer-note">YOUR PHOTOS ARE PRIVATE · AI SUGGESTIONS REVIEWED BY YOU · NO ADS</span><div><button className="text-button" onClick={() => navigate('/privacy')}>Privacy</button><button className="text-button" onClick={() => navigate('/login')}>Log in</button><button className="text-button" onClick={() => navigate('/signup')}>Get started</button></div></footer>
+  </main>
+}
+
+function Auth({ mode, onModeChange, onSignedIn }) {
   const [legal, setLegal] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -230,7 +294,7 @@ function Auth({ onSignedIn }) {
   }
 
   if (legal) return <LegalPage privacy={legal === 'privacy'} onBack={() => setLegal('')} onPrivacy={() => setLegal('privacy')} />
-  return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> AI clothing suggestions are reviewed by you; photos are not used to train models. No ads or recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
+  return <main className="auth-layout"><section className="auth-art"><div className="auth-art-top"><Mark /><span>PERSONAL WARDROBE / V0</span></div><div className="fabric-scene" aria-hidden="true"><div className="garment garment-one" /><div className="garment garment-two" /><div className="garment garment-three" /><div className="hanger" /><span className="scene-tag">01 — YOURS, BY DESIGN</span></div><div className="art-caption"><span>LESS SEARCHING.</span><span>MORE GETTING DRESSED.</span></div><div className="auth-art-footer"><span>PRIVATE BY DEFAULT</span><span>MADE FOR YOUR EVERYDAY</span></div></section><section className="auth-panel"><div className="auth-mobile-brand"><Mark /><span>THE FOLD</span></div><div className="auth-form-wrap"><div className="eyebrow">YOUR CLOSET, IN GOOD ORDER</div><h1>{mode === 'login' ? <>Come on<br />in.</> : <>Make room<br />for more.</>}</h1><p className="auth-copy">{mode === 'login' ? 'A little more clarity, every morning.' : 'Start with the pieces you reach for.'}</p><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Your name<input type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>}<label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} /></label><label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === 'signup' ? 12 : 1} maxLength={128} /><small>{mode === 'signup' ? 'Use at least 12 characters.' : 'Your password is managed securely by Supabase Auth.'}</small></label>{mode === 'signup' && <label className="consent-row"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} required /><span>I am 18 or older, agree to the <button type="button" className="inline-link" onClick={() => setLegal('terms')}>Terms &amp; Conditions</button>, and have read the <button type="button" className="inline-link" onClick={() => setLegal('privacy')}>Privacy notice</button>.</span></label>}{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="profile-saved" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy || (mode === 'signup' && (!accepted || !name.trim()))}>{busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}<span aria-hidden="true">↗</span></button></form><div className="auth-switch">{mode === 'login' ? 'New around here?' : 'Already have an account?'} <button className="inline-link" onClick={() => onModeChange(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div><p className="auth-privacy-note"><span className="lock-dot" /> AI clothing suggestions are reviewed by you; photos are not used to train models. No ads or recommendations.</p></div><footer className="auth-bottom"><button className="text-button" onClick={() => setLegal('privacy')}>Privacy</button><span>© THE FOLD 2026</span><button className="text-button" onClick={() => setLegal('terms')}>Terms</button></footer></section></main>
 }
 
 function ProfilePage({ profile, email, session, theme, onThemeChange, section = 'profile', onNavigate, onBack, onSaved, onAvatarSaved, onPrivacy, onExport, onLogout, onDelete }) {
@@ -764,6 +828,7 @@ export default function WardrobeApp() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [editingItem, setEditingItem] = useState(null)
   const [selectedOutfit, setSelectedOutfit] = useState(null)
+  const [publicRoute, setPublicRoute] = useState(() => publicRouteFromPath(window.location.pathname))
   const [theme, setTheme] = useState(() => window.localStorage.getItem('the-fold-theme') === 'dark' ? 'dark' : 'light')
   const [modal, setModal] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -784,6 +849,16 @@ export default function WardrobeApp() {
   useEffect(() => {
     window.localStorage.setItem('the-fold-theme', theme)
   }, [theme])
+  useEffect(() => {
+    const handlePopState = () => setPublicRoute(publicRouteFromPath(window.location.pathname))
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+  const navigatePublic = useCallback((path) => {
+    window.history.pushState({}, '', path)
+    setPublicRoute(publicRouteFromPath(path))
+    window.scrollTo(0, 0)
+  }, [])
   const updateBusy = useCallback((nextBusy) => {
     busyRef.current = nextBusy
     if (nextBusy) busyStartedAtRef.current = Date.now()
@@ -800,6 +875,10 @@ export default function WardrobeApp() {
     }
     setSession(nextSession)
   }, [updateBusy])
+  const signInFromPublicPage = useCallback(async (nextSession) => {
+    applySession(nextSession)
+    navigatePublic('/')
+  }, [applySession, navigatePublic])
 
   const refresh = useCallback(async () => {
     if (!userId) return
@@ -1028,12 +1107,14 @@ export default function WardrobeApp() {
       const { error } = await supabase.rpc('delete_my_account')
       if (error) throw error
       await supabase.auth.signOut({ scope: 'local' })
+      navigatePublic('/')
     } catch (error) { setNotice(error.message) }
   }
 
   async function logout() {
     const { error } = await supabase.auth.signOut()
     if (error) setNotice(error.message)
+    else navigatePublic('/')
   }
 
   async function retryLoading() {
@@ -1092,8 +1173,13 @@ export default function WardrobeApp() {
   if (profileSection && user && !profile) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<main className="profile-page"><button className="text-button back-link" onClick={() => setPage('app')}>← Back to wardrobe</button><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile unavailable</h1><p className="legal-intro">Your profile could not be loaded. Return to the wardrobe and try again.</p>{notice && <p className="form-error" role="alert">{notice}</p>}</main><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (profileSection && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<ProfilePage profile={profile} email={user.email} session={session} theme={theme} section={profileSection} onNavigate={profileNav} onThemeChange={setTheme} onBack={() => setPage('app')} onSaved={setProfile} onAvatarSaved={saveAvatarToProfile} onPrivacy={() => setPage('privacy')} onExport={exportData} onLogout={logout} onDelete={deleteAccount} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
   if (page === 'privacy' && user) return <div className={`app-shell theme-${theme}`}>{mobileSectionHeader}{loadingError && <LoadingError message={loadingError} onRetry={retryWardrobe} />}<LegalPage privacy activeSection="privacy" onSectionNavigate={profileNav} onBack={() => setPage('app')} /><BottomNav view={view} page={page} onNavigate={(next) => next === 'profile' ? setPage('profile') : (setPage('app'), setView(next))} onAdd={() => { setPage('app'); setModal('add') }} /></div>
-  if (page === 'privacy') return <LegalPage privacy onBack={() => setPage(user ? 'app' : 'auth')} />
-  if (!session) return <Auth onSignedIn={applySession} />
+  if (!session && publicRoute === 'privacy') return <LegalPage privacy backLabel="Back to The Fold" onBack={() => navigatePublic('/')} />
+  if (!session) {
+    if (publicRoute === 'login' || publicRoute === 'signup') {
+      return <div className={`app-shell theme-${theme}`}><Auth mode={publicRoute} onModeChange={(mode) => navigatePublic(mode === 'signup' ? '/signup' : '/login')} onSignedIn={signInFromPublicPage} /></div>
+    }
+    return <div className={`app-shell theme-${theme}`}><PublicLanding theme={theme} onThemeChange={setTheme} onNavigate={navigatePublic} /></div>
+  }
 
   if (view !== 'legacy') {
     const visible = clothes.filter((item) => (filter === 'All' || item.category === filter) &&
