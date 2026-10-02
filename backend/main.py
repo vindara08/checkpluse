@@ -3,9 +3,11 @@ from __future__ import annotations
 import io
 import logging
 import os
+import tempfile
 import warnings
+from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Literal, NamedTuple, get_args
+from typing import Annotated, Any, Literal, NamedTuple, get_args
 
 import httpx
 from dotenv import load_dotenv
@@ -46,7 +48,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def limit_photo_request_size(request: Request, call_next):
-    if request.url.path == "/api/images/compress":
+    if request.url.path in {"/api/images/compress", "/api/images/analyze"}:
         content_length = request.headers.get("content-length")
         if content_length:
             try:
@@ -109,7 +111,19 @@ def authenticated_user(
 
     if result.status_code == 401:
         raise HTTPException(status_code=401, detail="Your session expired. Sign in again.")
+    if result.status_code == 403:
+        try:
+            response_body = result.json()
+        except (ValueError, TypeError):
+            response_body = {}
+        message = response_body.get("msg") or response_body.get("message")
+        if isinstance(message, str) and "session_id claim" in message:
+            raise HTTPException(
+                status_code=401,
+                detail="Your sign-in session is no longer valid. Sign in again.",
+            )
     if result.status_code != 200:
+        logger.warning("Supabase session verification failed with status %s", result.status_code)
         raise HTTPException(status_code=502, detail="Supabase could not verify your session.")
     try:
         user_id = result.json()["id"]
@@ -238,6 +252,58 @@ def compress_image(data: bytes) -> bytes:
         raise HTTPException(status_code=415, detail="That file is not a supported image.") from exc
 
 
+@lru_cache(maxsize=1)
+def load_main9_module():
+    root = Path(__file__).resolve().parents[1]
+    module_path = root / "main9.py"
+    if not module_path.exists():
+        raise FileNotFoundError(f"Missing Main 9 model entrypoint: {module_path}")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("checkplus_main9", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load Main 9 module from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def analyze_uploaded_image(data: bytes) -> dict[str, Any]:
+    try:
+        module = load_main9_module()
+    except Exception as exc:  # pragma: no cover - depends on local AI runtime
+        logger.exception("Could not initialize Main 9")
+        raise HTTPException(
+            status_code=503,
+            detail="Main 9 AI is not available in this environment. Please configure the model and try again.",
+        ) from exc
+
+    suffix = ".png"
+    if data[:2] == b"\xFF\xD8":
+        suffix = ".jpg"
+    elif data[:4] == b"RIFF":
+        suffix = ".webp"
+
+    with tempfile.TemporaryDirectory(prefix="the-fold-ai-") as temp_dir:
+        image_path = Path(temp_dir) / f"upload{suffix}"
+        image_path.write_bytes(data)
+        try:
+            result = module.analyze_image(str(image_path))
+        except Exception as exc:  # pragma: no cover - model runtime failures
+            logger.exception("Main 9 failed to analyze an uploaded image")
+            raise HTTPException(
+                status_code=502,
+                detail="Main 9 could not analyze this image. Please try another clear clothing photo.",
+            ) from exc
+
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=502, detail="Main 9 returned an invalid analysis result.")
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message") or "No supported clothing was detected in that image.")
+    return result
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -270,3 +336,31 @@ def compress_upload(
         raise HTTPException(status_code=415, detail="Use a JPG, PNG, or WebP image.")
     compressed = compress_image(photo.file.read(MAX_UPLOAD_BYTES + 1))
     return Response(content=compressed, media_type="image/webp")
+
+
+@app.post("/api/images/analyze")
+def analyze_upload(
+    user_id: Annotated[str, Depends(authenticated_user_id)],
+    photo: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    del user_id
+    if photo.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=415, detail="Use a JPG, PNG, or WebP image.")
+    image_bytes = photo.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Choose an image no larger than 8 MB.")
+    result = analyze_uploaded_image(image_bytes)
+    items = result.get("items")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=502, detail="Main 9 returned no analyzed clothing items.")
+    if not all(isinstance(item, dict) for item in items):
+        raise HTTPException(status_code=502, detail="Main 9 returned an invalid clothing item.")
+    for item in items:
+        item.pop("detection_confidence", None)
+        item.pop("pattern_confidence", None)
+    logger.info(
+        "Main 9 returning %s analyzed clothing items: %s",
+        len(items),
+        ", ".join(str(item.get("clothing_type", "unknown")) for item in items),
+    )
+    return result

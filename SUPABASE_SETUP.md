@@ -53,11 +53,18 @@ create table if not exists public.clothing_items (
   user_id uuid not null references auth.users(id) on delete cascade,
   image_path text not null unique,
   category text not null check (category in ('Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories')),
-  color text not null default '' check (char_length(color) <= 40),
-  subcategory text not null default '' check (char_length(subcategory) <= 60),
-  season text not null default '' check (char_length(season) <= 30),
+  clothing_type text not null default '' check (char_length(clothing_type) <= 60),
+  dominant_color text not null default '' check (char_length(dominant_color) <= 40),
+  secondary_color text check (secondary_color is null or char_length(secondary_color) <= 40),
+  color_family text check (color_family is null or char_length(color_family) <= 40),
+  brightness text check (brightness is null or char_length(brightness) <= 30),
+  pattern text check (pattern is null or char_length(pattern) <= 40),
+  season text not null check (season <> '' and char_length(season) <= 30),
+  formality text not null check (formality <> '' and char_length(formality) <= 40),
+  occasion text not null check (occasion <> '' and char_length(occasion) <= 60),
   notes text not null default '' check (char_length(notes) <= 500),
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   check (split_part(image_path, '/', 1) = user_id::text)
 );
 
@@ -129,6 +136,22 @@ drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at
   before update on public.profiles
   for each row execute function public.set_profile_updated_at();
+
+create or replace function public.set_clothing_item_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists clothing_items_updated_at on public.clothing_items;
+create trigger clothing_items_updated_at
+  before update on public.clothing_items
+  for each row execute function public.set_clothing_item_updated_at();
 
 alter table public.profiles enable row level security;
 alter table public.consent_records enable row level security;
@@ -232,13 +255,19 @@ If Supabase already has an `avatar_path` column from a prior manual run, keep it
 - `outfit_items`: ordered references joining an outfit to that owner's clothing items.
 - `storage.objects`: managed by Supabase; app policies restrict objects in `wardrobe-images` by user UUID prefix.
 
+### Existing deployments: structured Main 9 attributes
+
+For an existing installation created with the earlier `color` and `subcategory` columns, review the deployed `public.clothing_items` schema and apply [`supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql`](./supabase/migrations/20261002_add_structured_ai_clothing_attributes.sql) manually before deploying the matching frontend. The migration adds `dominant_color` and `clothing_type`, then copies the old `color` and `subcategory` values into the new columns only when those old columns exist and the new value is null. It does not rename or drop the old columns. It adds separate secondary color, color family, brightness, pattern, formality, occasion, and update timestamp columns. `NOT VALID` constraints preserve historical rows without validating their existing values and require non-empty context on new or updated rows. Confidence columns, if present, are removed because they are model metadata rather than wardrobe data. Existing notes, row IDs, image paths, and outfit links are preserved.
+
+The migration does not parse or rewrite existing context values or notes. Historical rows with missing values remain unchanged because the new context constraints are `NOT VALID`; new and updated rows must satisfy them. The existing `image_path` uniqueness and outfit relationships remain unchanged. When one photo yields multiple clothing items, the app saves a separate copy of the reviewed photo under each item's unique Storage path and inserts one `clothing_items` row per item. This keeps deletion and outfits attached to individual wardrobe item IDs without adding a new image table. The migration is manual, is not run by the app, and must be confirmed on the target Supabase project before deploying the schema-dependent frontend.
+
 ## 3. Configure signup email behavior
 
 In **Authentication → URL Configuration**, set the local Site URL to the active Vite origin (`http://localhost:5173` or `http://localhost:5174`) and add the production frontend URL before deployment. Configure email confirmation as desired. When confirmation is enabled, signup records the account/consent in Auth and the user must confirm their email before getting an authenticated session.
 
 ## 4. Configure local environment
 
-Copy the root `.env.example` to `.env.local`; copy `backend/.env.example` to `backend/.env`. Set the same project URL and publishable key in each. These `sb_publishable_...` keys are intended for browser use; never substitute a service-role/secret key.
+Copy the root `.env.example` to `.env.local`; copy `backend/.env.example` to `backend/.env`. Replace `YOUR_PROJECT_ID` and `YOUR_PUBLISHABLE_KEY` with the values for your Supabase project in both files. Publishable keys are designed for browser use; never substitute a service-role/secret key. Keep both local environment files out of source control.
 
 The API loads `backend/.env` automatically. Set `APP_ORIGINS` to comma-separated production/LAN origins as needed; local Vite origins `http://localhost:5173` and `http://localhost:5174` are allowed by the API. Then start:
 
@@ -258,10 +287,10 @@ Restart Vite after changing `.env.local`, and restart FastAPI after changing `ba
 
 1. Signup sends name, age confirmation, terms/privacy acceptance, and their versions to Supabase Auth user metadata. The database trigger creates `profiles` and three consent rows.
 2. Supabase Auth returns a session JWT. The React Supabase client attaches it to Postgres and Storage operations; RLS checks `auth.uid()` for every row/object. Avatar selection operations go through FastAPI with the same user JWT and rely on the existing owner-only profile RLS policy.
-3. On clothing upload, the browser sends the original file and user JWT to FastAPI. FastAPI validates the JWT through `/auth/v1/user`, then Pillow rotates, resizes, strips EXIF, and encodes WebP.
-4. React uploads that WebP directly to the private bucket at `<user-uuid>/<random-uuid>.webp`. It inserts the remaining clothing metadata and path into `clothing_items`; the SQL check and RLS policy require the caller's UUID.
+3. On clothing upload, the browser first sends the original file and user JWT to FastAPI. FastAPI validates the JWT through `/auth/v1/user` and temporarily runs Main 9 analysis; the AI returns every duplicate-filtered detection and does not create database records or upload to Storage. Unsupported images are rejected.
+4. The user reviews and edits the AI fields for every detected item and provides any season/formality/occasion/notes. Only after confirming Save does FastAPI/Pillow rotate, resize, strip EXIF, and encode WebP; React uploads one copy per item to distinct private bucket paths and inserts one user-approved metadata row per item into `clothing_items`. The SQL check and RLS policy require the caller's UUID. If an upload or row insert fails, the frontend attempts to remove uploaded paths and reports a cleanup failure explicitly.
 5. The frontend maps the saved `profiles.avatar_id` to a bundled illustration under `public/avatars/`. FastAPI accepts only the documented built-in IDs; no avatar image is uploaded or stored.
-6. Clothes, outfits, profiles, and clothing photos are fetched only under the current user's session. Clothing photo display uses short-lived signed URLs. No AI or recommendation processing is involved.
+6. Clothes, outfits, profiles, and clothing photos are fetched only under the current user's session. Clothing photo display uses short-lived signed URLs. Main 9 processes only provisional clothing-analysis requests; AI suggestions are reviewed by the user and photos are not used to train models. No outfit recommendations are involved. Main 9's desktop-only Tkinter UI is optional and is not imported by headless FastAPI deployments.
 7. Test two users: each should see/edit only their own rows, cannot read or delete the other's image, and cannot link the other's clothing into an outfit.
 
 ## 6. Built-in avatar API

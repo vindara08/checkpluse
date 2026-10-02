@@ -6,8 +6,20 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#21483d" />
-  <meta name="description" content="A private digital wardrobe and outfit builder." />
-  <title>The Fold | Digital Wardrobe</title>
+  <meta name="description" content="Keep your wardrobe together, make outfits from your own pieces, and review AI clothing suggestions before anything is saved." />
+  <title>The Fold | Your wardrobe, well kept</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem('the-fold-theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      document.documentElement.dataset.theme = 'light';
+    }
+  </script>
+  <style>
+    html { color: #1e2925; background: #f4f5f1; }
+    html[data-theme="dark"] { color: #f3f0e9; color-scheme: dark; background: #191a18; }
+    body { color: inherit; background: inherit; }
+  </style>
 </head>
 
 <body>
